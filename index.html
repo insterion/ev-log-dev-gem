@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EV Log</title>
+
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="manifest" href="./manifest.json" />
+</head>
+<body>
+
+  <header>
+    <h1>EV Log</h1>
+    <h2>charging + maintenance • prices saved per entry</h2>
+  </header>
+
+  <nav>
+    <button class="tabbtn active" data-tab="log">Log</button>
+    <button class="tabbtn" data-tab="costs">Costs</button>
+    <button class="tabbtn" data-tab="summary">Summary</button>
+    <button class="tabbtn" data-tab="settings">Settings</button>
+    <button class="tabbtn" data-tab="compare">Compare</button>
+  </nav>
+
+  <!-- ================= LOG TAB ================= -->
+  <section id="log" class="tab active">
+
+    <div class="section-block">
+      <label>Дата</label>
+      <input type="date" id="date" />
+    </div>
+
+    <div class="section-block">
+      <label>kWh</label>
+      <input type="number" id="kwh" placeholder="40" inputmode="decimal" />
+    </div>
+
+    <div class="section-block">
+      <label>Тип</label>
+      <select id="type">
+        <option value="public">Публично</option>
+        <option value="public-xp">Публично скъпо</option>
+        <option value="home">Домашно</option>
+        <option value="home-xp">Домашно скъпо</option>
+      </select>
+    </div>
+
+    <div class="section-block">
+      <label>Цена (£/kWh)</label>
+      <input type="number" id="price" placeholder="0.56" inputmode="decimal" />
+    </div>
+
+    <div class="section-block">
+      <label>Бележка</label>
+      <input type="text" id="note" placeholder="BP / Gridserve / Go…" />
+    </div>
+
+    <button id="addEntry">Add</button>
+    <button id="sameAsLast">Same as last</button>
+
+    <details id="logDetails">
+      <summary>Details (breakdown)</summary>
+      <div id="logTable"></div>
+    </details>
+
+  </section>
+
+  <!-- ================= COSTS TAB ================= -->
+  <section id="costs" class="tab">
+
+    <div class="section-block">
+      <label>Дата</label>
+      <input type="date" id="c_date" />
+    </div>
+
+    <div class="section-block">
+      <label>Category</label>
+      <select id="c_category">
+        <option value="Tyres">Tyres</option>
+        <option value="Pads">Pads</option>
+        <option value="Service">Service</option>
+        <option value="Insurance">Insurance</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="c_applies">Applies to</label>
+      <select id="c_applies">
+        <option value="ev">EV</option>
+        <option value="ice">ICE</option>
+        <option value="both">Both</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="section-block">
+      <label>£ (amount)</label>
+      <input type="number" id="c_amount" placeholder="80" inputmode="decimal" />
+    </div>
+
+    <div class="section-block">
+      <label>Description</label>
+      <input type="text" id="c_note" placeholder="Front pads + labour" />
+    </div>
+
+    <button id="c_add">Add cost</button>
+
+    <details id="costDetails">
+      <summary>Totals (for current period)</summary>
+      <div id="costTable"></div>
+    </details>
+
+  </section>
+
+  <!-- ================= SUMMARY TAB ================= -->
+  <section id="summary" class="tab">
+
+    <h3>This month</h3>
+    <div id="summary_this"></div>
+
+    <h3>Last month</h3>
+    <div id="summary_last"></div>
+
+    <h3>Average total</h3>
+    <div id="summary_avg"></div>
+
+  </section>
+
+  <!-- ================= SETTINGS TAB ================= -->
+  <section id="settings" class="tab">
+
+    <h2>Prices (£/kWh)</h2>
+
+    <label>Public</label>
+    <input type="number" id="p_public" step="0.001" />
+
+    <label>Public xp</label>
+    <input type="number" id="p_public_xp" step="0.001" />
+
+    <label>Home</label>
+    <input type="number" id="p_home" step="0.001" />
+
+    <label>Home xp</label>
+    <input type="number" id="p_home_xp" step="0.001" />
+
+    <h2>Charger investment</h2>
+
+    <label>Hardware (£)</label>
+    <input type="number" id="p_hw" step="0.01" />
+
+    <label>Installation (£)</label>
+    <input type="number" id="p_install" step="0.01" />
+
+    <button id="savePrices">Save settings</button>
+    <button id="exportBackup">Export backup</button>
+    <button id="importBackup">Import backup</button>
+
+  </section>
+
+  <!-- ================= COMPARE TAB ================= -->
+  <section id="compare" class="tab">
+
+    <h2>EV vs ICE calculations</h2>
+
+    <!-- Compare assumptions -->
+    <details id="compareAssumptions" open>
+      <summary>Assumptions (edit + save)</summary>
+
+      <div class="section-block">
+        <label>EV efficiency (mi/kWh)</label>
+        <input type="number" id="cmp_ev_mpkwh" step="0.1" inputmode="decimal" placeholder="2.8" />
+      </div>
+
+      <div class="section-block">
+        <label>ICE efficiency (MPG)</label>
+        <input type="number" id="cmp_ice_mpg" step="1" inputmode="decimal" placeholder="45" />
+      </div>
+
+      <div class="section-block">
+        <label>ICE miles (selected period)</label>
+        <input type="number" id="cmp_ice_miles_period" step="1" min="0" inputmode="decimal" placeholder="e.g. 800" />
+      </div>
+
+      <div class="section-block">
+        <label>Diesel price (£/litre)</label>
+        <input type="number" id="cmp_diesel_per_litre" step="0.01" inputmode="decimal" placeholder="1.44" />
+      </div>
+
+      <div class="section-block">
+        <label>Shared costs (Both)</label>
+        <select id="cmp_both_mode">
+          <option value="split">Split 50/50 (recommended)</option>
+          <option value="double">Count in both (100% + 100%)</option>
+        </select>
+      </div>
+
+      <button id="cmp_save" type="button">Save compare settings</button>
+      <button id="cmp_reset" type="button">Reset compare defaults</button>
+    </details>
+
+    <div id="compareStats"></div>
+
+  </section>
+
+  <div id="toast"></div>
+
+  <!-- scripts -->
+  <script src="data.js"></script>
+  <script src="calc.js"></script>
+
+  <!-- новите разделени UI файлове -->
+  <script src="ui-core.js"></script>
+  <script src="ui-log.js"></script>
+  <script src="ui-costs.js"></script>
+  <script src="ui-summary.js"></script>
+  <script src="ui-compare.js"></script>
+
+  <script src="app-core.js"></script>
+  <script src="app-totals.js"></script>
+  <script src="app-render.js"></script>
+  <script src="app-actions.js"></script>
+  <script src="app-export.js"></script>
+  <script src="app-init.js"></script>
+
+</body>
+</html>
