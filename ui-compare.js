@@ -1,128 +1,141 @@
 /* * ui-compare.js
- * Handles the User Interface for the Comparison Tab
- * Dependencies: calc.js
+ * Updated: Dynamic Efficiency Input
  */
 
 const UICompare = {
-    // Кеширани DOM елементи
     elements: {
-        inputKwh: document.getElementById('input-load-kwh'), // Твоето поле за kWh
-        // Приемам, че тези полета съществуват. Ако не - кодът ще ползва defaults.
+        inputKwh: document.getElementById('input-load-kwh'),
+        inputEfficiency: document.getElementById('input-efficiency'), // Новото поле
+        
+        // Приемаме, че тези съществуват или ще бъдат добавени
         inputPriceKwh: document.getElementById('price-kwh'), 
         inputPriceFuel: document.getElementById('price-fuel'),
+        
         resultContainer: document.getElementById('compare-results') 
     },
 
-    // Конфигурация за сравнението
-    config: {
-        evEfficiency: 4.0, // mi/kWh
-        iceMpg: 44.0       // MPG
+    // Стандартни стойности, ако полетата са празни
+    defaults: {
+        efficiency: 3.0, // Твоето желание за default
+        iceMpg: 44.0,
+        priceKwh: 0.25,  // Примерна цена
+        priceFuel: 6.50  // Примерна цена
     },
 
     init: function() {
-        console.log('UI Compare Initialized');
-        
-        // Ако контейнерът за резултати липсва, създаваме го динамично
+        // Създаваме контейнер за резултати, ако го няма
         if (!this.elements.resultContainer) {
             const container = document.createElement('div');
             container.id = 'compare-results';
             container.style.marginTop = '20px';
-            // Добавяме го след инпута за kWh (или където е подходящо в твоя HTML)
-            if(this.elements.inputKwh) {
-                this.elements.inputKwh.parentNode.appendChild(container);
-            }
+            // Добавяме го след последното налично поле
+            const parent = this.elements.inputKwh ? this.elements.inputKwh.parentNode : document.body;
+            parent.appendChild(container);
             this.elements.resultContainer = container;
         }
 
         this.addEventListeners();
+        // Първоначално изчисление при зареждане
+        this.updateDisplay();
     },
 
     addEventListeners: function() {
-        // Слушаме за промяна във въведените kWh
-        if (this.elements.inputKwh) {
-            this.elements.inputKwh.addEventListener('input', () => this.updateDisplay());
-        }
-        
-        // Слушаме и за промяна в цените (ако полетата съществуват)
-        if (this.elements.inputPriceKwh) {
-            this.elements.inputPriceKwh.addEventListener('input', () => this.updateDisplay());
-        }
-        if (this.elements.inputPriceFuel) {
-            this.elements.inputPriceFuel.addEventListener('input', () => this.updateDisplay());
-        }
+        // Закачаме слушатели към всички възможни полета
+        const inputs = [
+            this.elements.inputKwh, 
+            this.elements.inputEfficiency, 
+            this.elements.inputPriceKwh, 
+            this.elements.inputPriceFuel
+        ];
+
+        inputs.forEach(input => {
+            if (input) {
+                input.addEventListener('input', () => this.updateDisplay());
+            }
+        });
     },
 
     getInputs: function() {
-        // Взимаме стойностите или ползваме защитни такива (0 или стандартни цени)
-        const kwh = parseFloat(this.elements.inputKwh ? this.elements.inputKwh.value : 0) || 0;
-        
-        // Опитваме да вземем цените от полетата, ако ги няма - слагаме примерни
-        const priceKwh = this.elements.inputPriceKwh ? parseFloat(this.elements.inputPriceKwh.value) : 0.25; 
-        const priceFuel = this.elements.inputPriceFuel ? parseFloat(this.elements.inputPriceFuel.value) : 6.50; // Примерна цена за галон (UK/US)
-
-        return { kwh, priceKwh, priceFuel };
+        // Взимаме стойностите от полетата или ползваме defaults
+        return {
+            kwh: parseFloat(this.elements.inputKwh?.value) || 0,
+            eff: parseFloat(this.elements.inputEfficiency?.value) || this.defaults.efficiency,
+            mpg: this.defaults.iceMpg, // Може и това да стане динамично по-късно
+            
+            priceKwh: parseFloat(this.elements.inputPriceKwh?.value) || this.defaults.priceKwh,
+            priceFuel: parseFloat(this.elements.inputPriceFuel?.value) || this.defaults.priceFuel
+        };
     },
 
     updateDisplay: function() {
         const data = this.getInputs();
 
-        // 1. Изчисляваме колко мили можем да минем с този ток
-        const estimatedMiles = Calc.getEstimatedRange(data.kwh, this.config.evEfficiency);
+        // 1. Колко мили минаваме с тези kWh при тази ефективност?
+        const estimatedMiles = Calc.getEstimatedRange(data.kwh, data.eff);
 
-        // 2. Изчисляваме разходите
+        // 2. Смятаме парите
         const costEV = Calc.getEvCost(data.kwh, data.priceKwh);
-        const costICE = Calc.getIceCost(estimatedMiles, this.config.iceMpg, data.priceFuel);
+        const costICE = Calc.getIceCost(estimatedMiles, data.mpg, data.priceFuel);
 
         // 3. Сравняваме
         const comparison = Calc.compare(costEV, costICE);
 
-        // 4. Рендираме (Визуализация)
-        this.render(estimatedMiles, costEV, costICE, comparison);
+        // 4. Рисуваме
+        this.render(estimatedMiles, costEV, costICE, comparison, data);
     },
 
-    render: function(miles, costEV, costICE, comparison) {
+    render: function(miles, costEV, costICE, comparison, inputs) {
         const container = this.elements.resultContainer;
         
         if (miles <= 0) {
-            container.innerHTML = '<p style="color:#888; text-align:center;">Въведете kWh за изчисление...</p>';
+            container.innerHTML = '<div style="text-align:center; color:#ccc; padding:10px;">Въведи kWh...</div>';
             return;
         }
 
-        // Форматиране на валутата (може да го смениш на 'BGN' или 'GBP')
         const fmt = (num) => num.toFixed(2);
 
-        // HTML шаблон за "по-добрия вид"
         container.innerHTML = `
-            <div style="background: #1e1e1e; color: #fff; padding: 15px; border-radius: 12px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="background: #222; color: #eee; padding: 20px; border-radius: 16px; font-family: sans-serif; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
                 
-                <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">
-                    Прогноза: <span style="color: #4CAF50;">${miles.toFixed(1)} мили</span>
-                </h3>
+                <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                    <span style="font-size: 0.9em; color: #aaa;">Прогнозен пробег</span><br>
+                    <span style="font-size: 1.8em; font-weight: bold; color: #fff;">${miles.toFixed(1)} <small>mi</small></span>
+                    <div style="font-size: 0.8em; color: #666; margin-top: 4px;">при ${inputs.eff} mi/kWh</div>
+                </div>
                 
                 <div style="margin-bottom: 15px;">
-                    <div style="display:flex; justify-content:space-between; font-size: 0.9em; margin-bottom: 5px;">
-                        <span>⚡ EV Цена</span>
-                        <strong>${fmt(costEV)}</strong>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 5px;">
+                        <span style="color: #4CAF50; font-weight:bold;">⚡ EV Разход</span>
+                        <span style="font-size: 1.2em;">${fmt(costEV)}</span>
                     </div>
-                    <div style="background: #333; height: 10px; border-radius: 5px; overflow: hidden;">
+                    <div style="background: #444; height: 8px; border-radius: 4px; overflow: hidden;">
                         <div style="width: 100%; background: #4CAF50; height: 100%;"></div>
                     </div>
                 </div>
 
-                <div style="margin-bottom: 20px;">
-                    <div style="display:flex; justify-content:space-between; font-size: 0.9em; margin-bottom: 5px;">
-                        <span>⛽ ICE Цена (${this.config.iceMpg} mpg)</span>
-                        <strong>${fmt(costICE)}</strong>
+                <div style="margin-bottom: 25px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 5px;">
+                        <span style="color: #FF5722; font-weight:bold;">⛽ ДВГ Еквивалент</span>
+                        <span style="font-size: 1.2em;">${fmt(costICE)}</span>
                     </div>
-                    <div style="background: #333; height: 10px; border-radius: 5px; overflow: hidden;">
+                    <div style="background: #444; height: 8px; border-radius: 4px; overflow: hidden;">
                         <div style="width: ${Math.min((costICE / costEV) * 100, 100)}%; background: #FF5722; height: 100%;"></div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.75em; color: #888; margin-top: 2px;">
+                        при ${inputs.mpg} mpg
                     </div>
                 </div>
 
-                <div style="text-align: center; padding: 10px; background: ${comparison.isCheaper ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 87, 34, 0.2)'}; border-radius: 8px;">
+                <div style="background: ${comparison.isCheaper ? 'rgba(76, 175, 80, 0.15)' : 'rgba(255, 87, 34, 0.15)'}; 
+                            border: 1px solid ${comparison.isCheaper ? '#4CAF50' : '#FF5722'};
+                            padding: 12px; border-radius: 10px; text-align: center;">
+                    
                     ${comparison.isCheaper 
-                        ? `✅ Спестяваш: <strong>${fmt(comparison.savings)}</strong>` 
-                        : `❌ По-скъпо с: <strong>${fmt(Math.abs(comparison.savings))}</strong>`}
+                        ? `<div style="font-size:0.9em; color:#aaa;">Спестяваш</div>
+                           <div style="font-size:1.4em; font-weight:bold; color:#4CAF50;">${fmt(comparison.savings)}</div>` 
+                        : `<div style="font-size:0.9em; color:#aaa;">Загуба</div>
+                           <div style="font-size:1.4em; font-weight:bold; color:#FF5722;">${fmt(Math.abs(comparison.savings))}</div>`
+                    }
                 </div>
 
             </div>
@@ -130,7 +143,6 @@ const UICompare = {
     }
 };
 
-// Стартираме скрипта, когато страницата зареди
 document.addEventListener('DOMContentLoaded', () => {
     UICompare.init();
 });
