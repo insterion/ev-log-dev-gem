@@ -1,228 +1,126 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bg">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EV Log</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EV vs ICE Calculator</title>
+    
+    <meta name="theme-color" content="#1e1e1e">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
 
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="manifest" href="./manifest.json" />
+    <style>
+        /* Допълнителни стилове за по-добър вид, ако styles.css липсва или е стар */
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 480px; /* Ограничаваме ширината за телефони */
+        }
+        .card {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h2, h3 { margin-top: 0; color: #eee; }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            background: #2c2c2c;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            box-sizing: border-box; /* Важно за padding-а */
+            margin-bottom: 15px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .row {
+            display: flex;
+            gap: 15px;
+        }
+        .col {
+            flex: 1;
+        }
+        .small-note {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 15px;
+            display: block;
+        }
+    </style>
 </head>
 <body>
 
-  <header>
-    <h1>EV Log</h1>
-    <h2>charging + maintenance • prices saved per entry</h2>
-  </header>
-
-  <nav>
-    <button class="tabbtn active" data-tab="log">Log</button>
-    <button class="tabbtn" data-tab="costs">Costs</button>
-    <button class="tabbtn" data-tab="summary">Summary</button>
-    <button class="tabbtn" data-tab="settings">Settings</button>
-    <button class="tabbtn" data-tab="compare">Compare</button>
-  </nav>
-
-  <!-- ================= LOG TAB ================= -->
-  <section id="log" class="tab active">
-
-    <div class="section-block">
-      <label>Дата</label>
-      <input type="date" id="date" />
+<div class="container">
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h2>⚡ EV vs ⛽ ICE</h2>
     </div>
 
-    <div class="section-block">
-      <label>kWh</label>
-      <input type="number" id="kwh" placeholder="40" inputmode="decimal" />
+    <div class="card">
+        <h3>💰 Цени</h3>
+        <div class="row">
+            <div class="col">
+                <label for="price-kwh">Ток (£/kWh)</label>
+                <input type="number" id="price-kwh" value="0.25" step="0.01" placeholder="0.25">
+            </div>
+            <div class="col">
+                <label for="price-fuel">Гориво (£/Gal)</label>
+                <input type="number" id="price-fuel" value="6.50" step="0.01" placeholder="6.50">
+            </div>
+        </div>
+        <small class="small-note">Промени цените тук, за да се обновят сметките.</small>
     </div>
 
-    <div class="section-block">
-      <label>Тип</label>
-      <select id="type">
-        <option value="public">Публично</option>
-        <option value="public-xp">Публично скъпо</option>
-        <option value="home">Домашно</option>
-        <option value="home-xp">Домашно скъпо</option>
-      </select>
+    <div class="card">
+        <h3>🔋 Зареждане</h3>
+        
+        <label for="input-load-kwh">Заредена енергия (kWh)</label>
+        <input type="number" id="input-load-kwh" placeholder="Напр. 50" inputmode="decimal">
+
+        <label for="input-efficiency">Ефективност (mi/kWh)</label>
+        <div class="row">
+            <input type="number" id="input-efficiency" value="3.0" step="0.1" inputmode="decimal">
+        </div>
+        <small class="small-note">Зима: ~2.8 | Лято: ~3.5</small>
     </div>
 
-    <div class="section-block">
-      <label>Цена (£/kWh)</label>
-      <input type="number" id="price" placeholder="0.56" inputmode="decimal" />
-    </div>
+    <div id="compare-results"></div>
 
-    <div class="section-block">
-      <label>Бележка</label>
-      <input type="text" id="note" placeholder="BP / Gridserve / Go…" />
-    </div>
+</div>
 
-    <button id="addEntry">Add</button>
-    <button id="sameAsLast">Same as last</button>
+<script src="calc.js"></script>
+<script src="ui-compare.js"></script>
 
-    <details id="logDetails">
-      <summary>Details (breakdown)</summary>
-      <div id="logTable"></div>
-    </details>
-
-  </section>
-
-  <!-- ================= COSTS TAB ================= -->
-  <section id="costs" class="tab">
-
-    <div class="section-block">
-      <label>Дата</label>
-      <input type="date" id="c_date" />
-    </div>
-
-    <div class="section-block">
-      <label>Category</label>
-      <select id="c_category">
-        <option value="Tyres">Tyres</option>
-        <option value="Pads">Pads</option>
-        <option value="Service">Service</option>
-        <option value="Insurance">Insurance</option>
-        <option value="Other">Other</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="c_applies">Applies to</label>
-      <select id="c_applies">
-        <option value="ev">EV</option>
-        <option value="ice">ICE</option>
-        <option value="both">Both</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-
-    <div class="section-block">
-      <label>£ (amount)</label>
-      <input type="number" id="c_amount" placeholder="80" inputmode="decimal" />
-    </div>
-
-    <div class="section-block">
-      <label>Description</label>
-      <input type="text" id="c_note" placeholder="Front pads + labour" />
-    </div>
-
-    <button id="c_add">Add cost</button>
-
-    <details id="costDetails">
-      <summary>Totals (for current period)</summary>
-      <div id="costTable"></div>
-    </details>
-
-  </section>
-
-  <!-- ================= SUMMARY TAB ================= -->
-  <section id="summary" class="tab">
-
-    <h3>This month</h3>
-    <div id="summary_this"></div>
-
-    <h3>Last month</h3>
-    <div id="summary_last"></div>
-
-    <h3>Average total</h3>
-    <div id="summary_avg"></div>
-
-  </section>
-
-  <!-- ================= SETTINGS TAB ================= -->
-  <section id="settings" class="tab">
-
-    <h2>Prices (£/kWh)</h2>
-
-    <label>Public</label>
-    <input type="number" id="p_public" step="0.001" />
-
-    <label>Public xp</label>
-    <input type="number" id="p_public_xp" step="0.001" />
-
-    <label>Home</label>
-    <input type="number" id="p_home" step="0.001" />
-
-    <label>Home xp</label>
-    <input type="number" id="p_home_xp" step="0.001" />
-
-    <h2>Charger investment</h2>
-
-    <label>Hardware (£)</label>
-    <input type="number" id="p_hw" step="0.01" />
-
-    <label>Installation (£)</label>
-    <input type="number" id="p_install" step="0.01" />
-
-    <button id="savePrices">Save settings</button>
-    <button id="exportBackup">Export backup</button>
-    <button id="importBackup">Import backup</button>
-
-  </section>
-
-  <!-- ================= COMPARE TAB ================= -->
-  <section id="compare" class="tab">
-
-    <h2>EV vs ICE calculations</h2>
-
-    <!-- Compare assumptions -->
-    <details id="compareAssumptions" open>
-      <summary>Assumptions (edit + save)</summary>
-
-      <div class="section-block">
-        <label>EV efficiency (mi/kWh)</label>
-        <input type="number" id="cmp_ev_mpkwh" step="0.1" inputmode="decimal" placeholder="2.8" />
-      </div>
-
-      <div class="section-block">
-        <label>ICE efficiency (MPG)</label>
-        <input type="number" id="cmp_ice_mpg" step="1" inputmode="decimal" placeholder="45" />
-      </div>
-
-      <div class="section-block">
-        <label>ICE miles (selected period)</label>
-        <input type="number" id="cmp_ice_miles_period" step="1" min="0" inputmode="decimal" placeholder="e.g. 800" />
-      </div>
-
-      <div class="section-block">
-        <label>Diesel price (£/litre)</label>
-        <input type="number" id="cmp_diesel_per_litre" step="0.01" inputmode="decimal" placeholder="1.44" />
-      </div>
-
-      <div class="section-block">
-        <label>Shared costs (Both)</label>
-        <select id="cmp_both_mode">
-          <option value="split">Split 50/50 (recommended)</option>
-          <option value="double">Count in both (100% + 100%)</option>
-        </select>
-      </div>
-
-      <button id="cmp_save" type="button">Save compare settings</button>
-      <button id="cmp_reset" type="button">Reset compare defaults</button>
-    </details>
-
-    <div id="compareStats"></div>
-
-  </section>
-
-  <div id="toast"></div>
-
-  <!-- scripts -->
-  <script src="data.js"></script>
-  <script src="calc.js"></script>
-
-  <!-- новите разделени UI файлове -->
-  <script src="ui-core.js"></script>
-  <script src="ui-log.js"></script>
-  <script src="ui-costs.js"></script>
-  <script src="ui-summary.js"></script>
-  <script src="ui-compare.js"></script>
-
-  <script src="app-core.js"></script>
-  <script src="app-totals.js"></script>
-  <script src="app-render.js"></script>
-  <script src="app-actions.js"></script>
-  <script src="app-export.js"></script>
-  <script src="app-init.js"></script>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registered'))
+                .catch(err => console.log('SW error', err));
+        });
+    }
+</script>
 
 </body>
 </html>
