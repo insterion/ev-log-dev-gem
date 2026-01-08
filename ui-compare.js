@@ -1,164 +1,136 @@
-// ui-compare.js – render compare (costs-only + ICE equivalent fuel for EV miles)
+/* * ui-compare.js
+ * Handles the User Interface for the Comparison Tab
+ * Dependencies: calc.js
+ */
 
-(function () {
-  const U = window.EVUI;
+const UICompare = {
+    // Кеширани DOM елементи
+    elements: {
+        inputKwh: document.getElementById('input-load-kwh'), // Твоето поле за kWh
+        // Приемам, че тези полета съществуват. Ако не - кодът ще ползва defaults.
+        inputPriceKwh: document.getElementById('price-kwh'), 
+        inputPriceFuel: document.getElementById('price-fuel'),
+        resultContainer: document.getElementById('compare-results') 
+    },
 
-  function safeGet(obj, path, def) {
-    try {
-      let x = obj;
-      for (const k of path) x = x && x[k];
-      return x == null ? def : x;
-    } catch (e) {
-      return def;
+    // Конфигурация за сравнението
+    config: {
+        evEfficiency: 4.0, // mi/kWh
+        iceMpg: 44.0       // MPG
+    },
+
+    init: function() {
+        console.log('UI Compare Initialized');
+        
+        // Ако контейнерът за резултати липсва, създаваме го динамично
+        if (!this.elements.resultContainer) {
+            const container = document.createElement('div');
+            container.id = 'compare-results';
+            container.style.marginTop = '20px';
+            // Добавяме го след инпута за kWh (или където е подходящо в твоя HTML)
+            if(this.elements.inputKwh) {
+                this.elements.inputKwh.parentNode.appendChild(container);
+            }
+            this.elements.resultContainer = container;
+        }
+
+        this.addEventListeners();
+    },
+
+    addEventListeners: function() {
+        // Слушаме за промяна във въведените kWh
+        if (this.elements.inputKwh) {
+            this.elements.inputKwh.addEventListener('input', () => this.updateDisplay());
+        }
+        
+        // Слушаме и за промяна в цените (ако полетата съществуват)
+        if (this.elements.inputPriceKwh) {
+            this.elements.inputPriceKwh.addEventListener('input', () => this.updateDisplay());
+        }
+        if (this.elements.inputPriceFuel) {
+            this.elements.inputPriceFuel.addEventListener('input', () => this.updateDisplay());
+        }
+    },
+
+    getInputs: function() {
+        // Взимаме стойностите или ползваме защитни такива (0 или стандартни цени)
+        const kwh = parseFloat(this.elements.inputKwh ? this.elements.inputKwh.value : 0) || 0;
+        
+        // Опитваме да вземем цените от полетата, ако ги няма - слагаме примерни
+        const priceKwh = this.elements.inputPriceKwh ? parseFloat(this.elements.inputPriceKwh.value) : 0.25; 
+        const priceFuel = this.elements.inputPriceFuel ? parseFloat(this.elements.inputPriceFuel.value) : 6.50; // Примерна цена за галон (UK/US)
+
+        return { kwh, priceKwh, priceFuel };
+    },
+
+    updateDisplay: function() {
+        const data = this.getInputs();
+
+        // 1. Изчисляваме колко мили можем да минем с този ток
+        const estimatedMiles = Calc.getEstimatedRange(data.kwh, this.config.evEfficiency);
+
+        // 2. Изчисляваме разходите
+        const costEV = Calc.getEvCost(data.kwh, data.priceKwh);
+        const costICE = Calc.getIceCost(estimatedMiles, this.config.iceMpg, data.priceFuel);
+
+        // 3. Сравняваме
+        const comparison = Calc.compare(costEV, costICE);
+
+        // 4. Рендираме (Визуализация)
+        this.render(estimatedMiles, costEV, costICE, comparison);
+    },
+
+    render: function(miles, costEV, costICE, comparison) {
+        const container = this.elements.resultContainer;
+        
+        if (miles <= 0) {
+            container.innerHTML = '<p style="color:#888; text-align:center;">Въведете kWh за изчисление...</p>';
+            return;
+        }
+
+        // Форматиране на валутата (може да го смениш на 'BGN' или 'GBP')
+        const fmt = (num) => num.toFixed(2);
+
+        // HTML шаблон за "по-добрия вид"
+        container.innerHTML = `
+            <div style="background: #1e1e1e; color: #fff; padding: 15px; border-radius: 12px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                
+                <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                    Прогноза: <span style="color: #4CAF50;">${miles.toFixed(1)} мили</span>
+                </h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <div style="display:flex; justify-content:space-between; font-size: 0.9em; margin-bottom: 5px;">
+                        <span>⚡ EV Цена</span>
+                        <strong>${fmt(costEV)}</strong>
+                    </div>
+                    <div style="background: #333; height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div style="width: 100%; background: #4CAF50; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; font-size: 0.9em; margin-bottom: 5px;">
+                        <span>⛽ ICE Цена (${this.config.iceMpg} mpg)</span>
+                        <strong>${fmt(costICE)}</strong>
+                    </div>
+                    <div style="background: #333; height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div style="width: ${Math.min((costICE / costEV) * 100, 100)}%; background: #FF5722; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; padding: 10px; background: ${comparison.isCheaper ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 87, 34, 0.2)'}; border-radius: 8px;">
+                    ${comparison.isCheaper 
+                        ? `✅ Спестяваш: <strong>${fmt(comparison.savings)}</strong>` 
+                        : `❌ По-скъпо с: <strong>${fmt(Math.abs(comparison.savings))}</strong>`}
+                </div>
+
+            </div>
+        `;
     }
-  }
+};
 
-  function renderBreakdown(title, byCat) {
-    const entries = Object.entries(byCat || {});
-    if (!entries.length) return "";
-
-    const preferred = ["Tyres", "Pads", "Service", "Insurance", "Other"];
-    entries.sort((a, b) => {
-      const ai = preferred.indexOf(a[0]);
-      const bi = preferred.indexOf(b[0]);
-      if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-      return String(a[0]).localeCompare(String(b[0]));
-    });
-
-    const rows = entries
-      .filter(([, v]) => Number(v) !== 0)
-      .map(([k, v]) => `<p style="margin:0 0 3px;">${U.escapeHTML(k)}: <strong>${U.fmtGBP(v)}</strong></p>`)
-      .join("");
-
-    return `
-      <div style="margin-top:6px;padding:8px;border-radius:12px;background:#0a0a0a;border:1px solid #222;">
-        <p style="margin:0 0 6px;"><strong>${U.escapeHTML(title)}</strong></p>
-        ${rows || `<p style="margin:0;color:#b0b0b0;">No items.</p>`}
-      </div>
-    `;
-  }
-
-  function renderCompare(containerId, data) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-
-    if (!data) {
-      el.innerHTML = "<p>Not enough data yet.</p>";
-      return;
-    }
-
-    const evTotal = Number(data.evTotal || 0);
-    const iceTotal = Number(data.iceTotal || 0);
-    const diffAll = iceTotal - evTotal;
-
-    let allText = "about the same overall";
-    if (diffAll > 1) allText = "ICE more expensive overall";
-    else if (diffAll < -1) allText = "EV more expensive overall";
-
-    const iceEqFuelCost = Number(data.iceEqFuelCost || 0);
-    const iceTotalPlusEqFuel = Number(data.iceTotalPlusEqFuel || (iceTotal + iceEqFuelCost));
-    const diffAllPlusFuel = iceTotalPlusEqFuel - evTotal;
-
-    let allTextPlus = "about the same overall";
-    if (diffAllPlusFuel > 1) allTextPlus = "ICE more expensive overall";
-    else if (diffAllPlusFuel < -1) allTextPlus = "EV more expensive overall";
-
-    const topSummary = `
-      <div style="margin-bottom:8px;padding:6px 8px;border-radius:12px;background:#0a0a0a;border:1px solid #222;">
-        <p style="margin:0 0 4px;"><strong>Quick summary (selected period)</strong></p>
-        <p style="margin:0 0 4px;">
-          All-in difference (ICE – EV): <strong>${U.fmtGBP(Math.abs(diffAll))}</strong> (${allText})
-        </p>
-        <p style="margin:0;">
-          All-in + ICE fuel (same miles) (ICE – EV): <strong>${U.fmtGBP(Math.abs(diffAllPlusFuel))}</strong> (${allTextPlus})
-        </p>
-      </div>
-    `;
-
-    const evEnergyCost = Number(data.evEnergyCost || 0);
-
-    const maintEv = safeGet(data, ["maintenance", "ev", "total"], 0);
-    const maintIce = safeGet(data, ["maintenance", "ice", "total"], 0);
-    const maintBoth = safeGet(data, ["maintenance", "both", "total"], 0);
-    const maintOther = safeGet(data, ["maintenance", "other", "total"], 0);
-
-    const insEv = safeGet(data, ["insurance", "ev", "total"], 0);
-    const insIce = safeGet(data, ["insurance", "ice", "total"], 0);
-    const insBoth = safeGet(data, ["insurance", "both", "total"], 0);
-    const insOther = safeGet(data, ["insurance", "other", "total"], 0);
-
-    const evEnergyBlock = `
-      <details open>
-        <summary style="cursor:pointer;"><strong>EV energy (selected period)</strong></summary>
-        <div style="margin-top:6px;">
-          <p>Total kWh (period): <strong>${U.fmtNum(data.totalKwh, 1)}</strong></p>
-          <p>EV energy cost: <strong>${U.fmtGBP(evEnergyCost)}</strong></p>
-        </div>
-      </details>
-    `;
-
-    const eqFuelBlock = `
-      <details>
-        <summary style="cursor:pointer;"><strong>ICE equivalent fuel for EV miles (estimate)</strong></summary>
-        <div style="margin-top:6px;">
-          <p>EV estimated miles (@ ${U.fmtNum(data.evMilesPerKwh, 1)} mi/kWh): <strong>${U.fmtNum(data.evMiles || 0, 0)}</strong></p>
-          <p>ICE MPG used: <strong>${U.fmtNum(data.iceMpg || 0, 0)}</strong></p>
-          <p>Diesel price used: <strong>£${Number(data.icePerLitre || 0).toFixed(2)}</strong> / litre</p>
-          <p>ICE fuel cost (same miles): <strong>${U.fmtGBP(iceEqFuelCost)}</strong></p>
-          <p style="margin:6px 0 0;font-size:0.85rem;color:#b0b0b0;">
-            This is fuel-only, for the same miles as EV estimated miles (no ICE odometer input).
-          </p>
-        </div>
-      </details>
-    `;
-
-    let maintBlock = "";
-    if (maintEv || maintIce || maintBoth || maintOther) {
-      maintBlock = `
-        <details>
-          <summary style="cursor:pointer;"><strong>Maintenance (details)</strong></summary>
-          <div style="margin-top:6px;">
-            <p>Maintenance – EV: <strong>${U.fmtGBP(maintEv)}</strong>, ICE: <strong>${U.fmtGBP(maintIce)}</strong></p>
-            <p>Shared (Both): <strong>${U.fmtGBP(maintBoth)}</strong>, Other: <strong>${U.fmtGBP(maintOther)}</strong></p>
-            ${renderBreakdown("EV maintenance breakdown", safeGet(data, ["maintenance", "ev", "byCat"], {}))}
-            ${renderBreakdown("ICE maintenance breakdown", safeGet(data, ["maintenance", "ice", "byCat"], {}))}
-          </div>
-        </details>
-      `;
-    }
-
-    let insuranceBlock = "";
-    if (insEv || insIce || insBoth || insOther) {
-      const insDiff = Number(insIce || 0) - Number(insEv || 0);
-      let insDiffText = "about the same";
-      if (insDiff > 1) insDiffText = "ICE insurance higher";
-      else if (insDiff < -1) insDiffText = "EV insurance higher";
-
-      insuranceBlock = `
-        <details>
-          <summary style="cursor:pointer;"><strong>Insurance (details)</strong></summary>
-          <div style="margin-top:6px;">
-            <p>Insurance – EV: <strong>${U.fmtGBP(insEv)}</strong>, ICE: <strong>${U.fmtGBP(insIce)}</strong></p>
-            <p>Shared (Both): <strong>${U.fmtGBP(insBoth)}</strong>, Other: <strong>${U.fmtGBP(insOther)}</strong></p>
-            <p>Difference (ICE – EV): <strong>${U.fmtGBP(Math.abs(insDiff))}</strong> (${insDiffText})</p>
-          </div>
-        </details>
-      `;
-    }
-
-    const assumptionsLine = `
-      Assumptions: Costs-only totals (no ICE fuel/miles logged). Plus an extra ICE fuel estimate for EV miles using ICE mpg and £/litre.
-    `;
-
-    el.innerHTML = `
-      ${topSummary}
-      ${evEnergyBlock}
-      ${eqFuelBlock}
-      ${maintBlock}
-      ${insuranceBlock}
-      <p style="margin-top:10px;font-size:0.85rem;color:#b0b0b0;">${assumptionsLine}</p>
-    `;
-  }
-
-  window.EVUI.renderCompare = renderCompare;
-})();
+// Стартираме скрипта, когато страницата зареди
+document.addEventListener('DOMContentLoaded', () => {
+    UICompare.init();
+});
