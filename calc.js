@@ -1,63 +1,58 @@
-/* * calc.js
- * Double-checked logic for EV vs ICE comparison
- */
-
+/* file: calc.js */
 const Calc = {
-    // Настройки по подразбиране (ако няма въведени)
-    DEFAULT_EV_EFFICIENCY: 3.0, // мили за 1 kWh
-    DEFAULT_ICE_MPG: 44.0,      // мили за 1 галон
-
-    /**
-     * Изчислява прогнозния пробег на база заредени kWh
-     * @param {number} kwh - Заредени киловатчаса
-     * @param {number} efficiency - Ефективност (mi/kWh)
-     * @returns {number} - Пробег в мили
-     */
-    getEstimatedRange: function(kwh, efficiency) {
-        const eff = efficiency || this.DEFAULT_EV_EFFICIENCY;
-        return kwh * eff;
+    // Стандартни настройки (ако потребителят не е въвел нищо)
+    DEFAULTS: {
+        EV_EFFICIENCY: 3.0, // mi/kWh
+        ICE_MPG: 44.0,      // Miles per Gallon
+        PRICE_KWH: 0.25,    // £/kWh
+        PRICE_FUEL: 1.45    // £/liter (или 6.50 за галон, ще го уточним в UI)
     },
 
     /**
-     * Изчислява цената за пробег с ДВГ (ICE)
-     * @param {number} miles - Разстояние в мили
-     * @param {number} mpg - Разход (Miles Per Gallon)
-     * @param {number} fuelPrice - Цена на гориво за единица (галон/литър)
-     * @returns {number} - Цена за пътуването
+     * Превръща галони в литри и обратно (полезно ако цената е на литър, а разхода в MPG)
+     * 1 UK Gallon = 4.54609 Liters
      */
-    getIceCost: function(miles, mpg, fuelPrice) {
-        const realMpg = mpg || this.DEFAULT_ICE_MPG;
-        if (realMpg === 0) return 0; // Защита от деление на нула
-        
-        const gallonsNeeded = miles / realMpg;
-        return gallonsNeeded * fuelPrice;
+    convert: {
+        galToLiters: (gal) => gal * 4.54609,
+        litersToGal: (l) => l / 4.54609
     },
 
     /**
-     * Изчислява цената за зареждане на EV
-     * @param {number} kwh - Заредени kWh
-     * @param {number} kwhPrice - Цена на 1 kWh
-     * @returns {number} - Цена за зареждането
+     * Основна функция за сравнение
      */
-    getEvCost: function(kwh, kwhPrice) {
-        return kwh * kwhPrice;
-    },
+    analyze: function(kwh, efficiency, priceKwh, mpg, priceFuelPerGallon) {
+        // 1. Пробег с този ток
+        const range = kwh * efficiency;
 
-    /**
-     * Сравнява двата разхода и връща спестената сума
-     * @param {number} evCost 
-     * @param {number} iceCost 
-     * @returns {object} - Обект с разликата и процента
-     */
-    compare: function(evCost, iceCost) {
-        const savings = iceCost - evCost;
-        // Защита: ако iceCost е 0, да не връщаме NaN за процента
-        const percent = iceCost > 0 ? (savings / iceCost) * 100 : 0;
+        // 2. Разход за EV
+        const costEV = kwh * priceKwh;
+        const costPerMileEV = range > 0 ? costEV / range : 0;
+
+        // 3. Разход за ДВГ (ICE) за същото разстояние
+        // Колко галона са нужни за това разстояние?
+        const gallonsNeeded = mpg > 0 ? range / mpg : 0;
+        const costICE = gallonsNeeded * priceFuelPerGallon;
+        const costPerMileICE = range > 0 ? costICE / range : 0;
+
+        // 4. Сравнение
+        const savings = costICE - costEV;
         
         return {
-            savings: savings,
-            isCheaper: savings > 0,
-            percent: percent.toFixed(1)
+            rangeMiles: range,
+            ev: {
+                totalCost: costEV,
+                costPerMile: costPerMileEV
+            },
+            ice: {
+                totalCost: costICE,
+                costPerMile: costPerMileICE,
+                gallonsConsumed: gallonsNeeded
+            },
+            diff: {
+                value: savings,
+                isCheaper: savings > 0,
+                percent: costICE > 0 ? (savings / costICE) * 100 : 0
+            }
         };
     }
 };
