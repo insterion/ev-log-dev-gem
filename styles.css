@@ -1,15 +1,242 @@
-/* Animation for results showing up */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+/* * styles.css
+ * Full Dark Mode Theme matching EV Log Screenshot
+ */
+
+:root {
+    --bg-color: #000000;          /* Дълбоко черно за фон */
+    --card-bg: #121212;           /* Малко по-светло за карти */
+    --input-bg: #0d0d0d;          /* Тъмен фон за полета */
+    --border-color: #333333;      /* Цвят на рамките */
+    --primary-color: #00b341;     /* Зеленото от твоята снимка */
+    --primary-hover: #009933;
+    --text-main: #ffffff;
+    --text-muted: #aaaaaa;
+    --danger-color: #ff4444;      /* Червено за разходи/грешки */
+    --ice-color: #ff9800;         /* Оранжево за ДВГ */
+    --radius: 12px;               /* Заобляне на ъглите */
+}
+
+/* --- 1. BASE STYLES --- */
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 15px;
+    padding-bottom: 50px; /* Място за скролване най-долу */
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+/* За да не става прекалено широко на десктоп */
+.app-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+h1, h2, h3 {
+    margin-top: 0;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* --- 2. HEADER & NAVIGATION (TABS) --- */
+/* Стилове за горните бутони: Log, Costs, Summary... */
+.nav-scroller {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    scrollbar-width: none; /* Скрива скролбара за Firefox */
+}
+.nav-scroller::-webkit-scrollbar {
+    display: none; /* Скрива скролбара за Chrome/Safari */
+}
+
+.nav-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-radius: 20px; /* Силно заоблени като хапчета */
+    font-size: 0.95rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+/* Активният бутон става зелен (като Log на снимката) */
+.nav-btn.active {
+    background-color: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* --- 3. FORMS & INPUTS --- */
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+/* Стилове за всички полета (текст, числа, select) */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+    width: 100%;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 14px;
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    box-sizing: border-box; /* Важно за padding-а */
+    outline: none;
+    -webkit-appearance: none; /* Маха стандартния вид на iOS */
+}
+
+/* Когато цъкнеш на полето */
+input:focus, select:focus, textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+/* Махане на стрелките на number input-ите */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+/* Малък текст под полетата */
+.helper-text {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* --- 4. BUTTONS --- */
+.btn {
+    display: inline-block;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+
+.btn-primary {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+/* Бутонът "Add entry" от снимката */
+.btn-action {
+    background-color: #222;
+    border: 1px solid #444;
+    color: #fff;
+    margin-right: 10px;
+    width: auto; /* Не заема целия ред */
+}
+
+/* Основният бутон за изчисляване */
+.btn-calc {
+    background-color: var(--primary-color);
+    color: white;
+    margin-top: 10px;
+    padding: 15px;
+}
+.btn-calc:active {
+    background-color: var(--primary-hover);
+}
+
+/* --- 5. COMPARE TAB SPECIFICS (Резултатите) --- */
+.result-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 20px;
+    animation: slideUp 0.4s ease-out;
+}
+
+.result-header {
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+
+.big-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: block;
+}
+
+.cost-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.progress-container {
+    height: 8px;
+    background-color: #333;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s ease-out;
+}
+
+.bg-ev { background-color: var(--primary-color); }
+.bg-ice { background-color: var(--ice-color); }
+
+.final-verdict {
+    text-align: center;
+    padding: 15px;
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.05);
+    margin-top: 15px;
+}
+
+/* Анимация за появяване */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Ensure inputs look good on mobile */
-input[type="number"] {
-    -moz-appearance: textfield; /* Removes spinners in Firefox */
+/* --- 6. UTILITIES --- */
+.row {
+    display: flex;
+    gap: 15px;
 }
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+.col {
+    flex: 1;
 }
+.text-green { color: var(--primary-color); }
+.text-orange { color: var(--ice-color); }
+.text-muted { color: var(--text-muted); }
+
