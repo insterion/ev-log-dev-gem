@@ -1,242 +1,128 @@
-/* * styles.css
- * Full Dark Mode Theme matching EV Log Screenshot
- */
-
 :root {
-    --bg-color: #000000;          /* Дълбоко черно за фон */
-    --card-bg: #121212;           /* Малко по-светло за карти */
-    --input-bg: #0d0d0d;          /* Тъмен фон за полета */
-    --border-color: #333333;      /* Цвят на рамките */
-    --primary-color: #00b341;     /* Зеленото от твоята снимка */
-    --primary-hover: #009933;
+    --bg-color: #000000;
+    --card-bg: #121212;
+    --input-bg: #1e1e1e;
+    --border-color: #333333;
+    --primary-color: #00b341; /* EV Green */
     --text-main: #ffffff;
     --text-muted: #aaaaaa;
-    --danger-color: #ff4444;      /* Червено за разходи/грешки */
-    --ice-color: #ff9800;         /* Оранжево за ДВГ */
-    --radius: 12px;               /* Заобляне на ъглите */
 }
 
-/* --- 1. BASE STYLES --- */
 body {
     background-color: var(--bg-color);
     color: var(--text-main);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 15px;
-    padding-bottom: 50px; /* Място за скролване най-долу */
-    font-size: 16px;
-    line-height: 1.5;
+    margin: 0; 
+    padding: 15px; 
+    padding-bottom: 80px; /* Място за скрол */
 }
 
-/* За да не става прекалено широко на десктоп */
-.app-container {
-    max-width: 600px;
-    margin: 0 auto;
-}
+/* ЗАГЛАВИЕ */
+header h1 { margin: 0; font-size: 1.8rem; }
+header h2 { margin: 5px 0 20px 0; font-size: 0.9rem; color: var(--text-muted); font-weight: normal; }
 
-h1, h2, h3 {
-    margin-top: 0;
-    font-weight: 600;
-    color: var(--text-main);
-}
-
-/* --- 2. HEADER & NAVIGATION (TABS) --- */
-/* Стилове за горните бутони: Log, Costs, Summary... */
-.nav-scroller {
-    display: flex;
-    overflow-x: auto;
-    gap: 10px;
-    padding-bottom: 15px;
+/* НАВИГАЦИЯ (БУТОНИ) */
+nav {
+    display: flex; 
+    gap: 8px; 
+    overflow-x: auto; 
+    padding-bottom: 10px;
     margin-bottom: 20px;
-    scrollbar-width: none; /* Скрива скролбара за Firefox */
-}
-.nav-scroller::-webkit-scrollbar {
-    display: none; /* Скрива скролбара за Chrome/Safari */
+    border-bottom: 1px solid #222;
 }
 
-.nav-btn {
-    background: transparent;
+.tabbtn {
+    background: transparent; 
     border: 1px solid var(--border-color);
-    color: var(--text-muted);
-    padding: 8px 16px;
-    border-radius: 20px; /* Силно заоблени като хапчета */
-    font-size: 0.95rem;
-    white-space: nowrap;
+    color: var(--text-muted); 
+    padding: 8px 16px; 
+    border-radius: 20px;
+    font-size: 0.9rem; 
+    white-space: nowrap; 
     cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    display: inline-block;
+    transition: all 0.2s;
 }
 
-/* Активният бутон става зелен (като Log на снимката) */
-.nav-btn.active {
-    background-color: var(--primary-color);
-    color: #fff;
-    border-color: var(--primary-color);
-    font-weight: 500;
+.tabbtn.active {
+    background-color: var(--input-bg); 
+    color: #fff; 
+    border-color: #fff; 
+    font-weight: bold;
 }
 
-/* --- 3. FORMS & INPUTS --- */
-.form-group {
-    margin-bottom: 20px;
+/* ТАБОВЕ - ЛОГИКА ЗА СКРИВАНЕ */
+.tab {
+    display: none; /* Скрий всичко по подразбиране */
+    animation: fadeIn 0.3s ease;
 }
 
-label {
-    display: block;
-    color: var(--text-main);
-    margin-bottom: 8px;
-    font-size: 1rem;
+.tab.active {
+    display: block; /* Покажи само активния */
 }
 
-/* Стилове за всички полета (текст, числа, select) */
-input[type="text"],
-input[type="number"],
-input[type="date"],
-select,
-textarea {
-    width: 100%;
-    background-color: var(--input-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
-    padding: 14px;
-    border-radius: var(--radius);
-    font-size: 1.1rem;
-    box-sizing: border-box; /* Важно за padding-а */
-    outline: none;
-    -webkit-appearance: none; /* Маха стандартния вид на iOS */
-}
-
-/* Когато цъкнеш на полето */
-input:focus, select:focus, textarea:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 1px var(--primary-color);
-}
-
-/* Махане на стрелките на number input-ите */
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-  -webkit-appearance: none; 
-  margin: 0; 
-}
-
-/* Малък текст под полетата */
-.helper-text {
-    font-size: 0.85rem;
-    color: #666;
-    margin-top: 5px;
-}
-
-/* --- 4. BUTTONS --- */
-.btn {
-    display: inline-block;
-    padding: 12px 24px;
-    border-radius: 25px;
-    font-size: 1rem;
-    font-weight: 600;
-    text-align: center;
-    cursor: pointer;
-    border: none;
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 10px;
-}
-
-.btn-primary {
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
-}
-/* Бутонът "Add entry" от снимката */
-.btn-action {
-    background-color: #222;
-    border: 1px solid #444;
-    color: #fff;
-    margin-right: 10px;
-    width: auto; /* Не заема целия ред */
-}
-
-/* Основният бутон за изчисляване */
-.btn-calc {
-    background-color: var(--primary-color);
-    color: white;
-    margin-top: 10px;
-    padding: 15px;
-}
-.btn-calc:active {
-    background-color: var(--primary-hover);
-}
-
-/* --- 5. COMPARE TAB SPECIFICS (Резултатите) --- */
-.result-card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-top: 20px;
-    animation: slideUp 0.4s ease-out;
-}
-
-.result-header {
-    text-align: center;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 15px;
-    margin-bottom: 15px;
-}
-
-.big-number {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--text-main);
-    display: block;
-}
-
-.cost-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-
-.progress-container {
-    height: 8px;
-    background-color: #333;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 20px;
-}
-
-.progress-bar {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 1s ease-out;
-}
-
-.bg-ev { background-color: var(--primary-color); }
-.bg-ice { background-color: var(--ice-color); }
-
-.final-verdict {
-    text-align: center;
-    padding: 15px;
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, 0.05);
-    margin-top: 15px;
-}
-
-/* Анимация за появяване */
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- 6. UTILITIES --- */
-.row {
-    display: flex;
-    gap: 15px;
-}
-.col {
-    flex: 1;
-}
-.text-green { color: var(--primary-color); }
-.text-orange { color: var(--ice-color); }
-.text-muted { color: var(--text-muted); }
+/* ПОЛЕТА И ФОРМИ */
+.section-block { margin-bottom: 15px; }
 
+label { 
+    display: block; 
+    color: var(--text-muted); 
+    margin-bottom: 6px; 
+    font-size: 0.85rem; 
+}
+
+input, select {
+    width: 100%; 
+    padding: 12px; 
+    background: var(--input-bg);
+    border: 1px solid var(--border-color); 
+    color: white;
+    border-radius: 10px; 
+    font-size: 1rem; 
+    box-sizing: border-box;
+    outline: none;
+}
+
+input:focus, select:focus { border-color: var(--primary-color); }
+
+/* БУТОНИ ЗА ДЕЙСТВИЕ */
+button {
+    display: inline-block; 
+    padding: 12px 20px; 
+    border-radius: 10px;
+    font-weight: 600; 
+    text-align: center; 
+    cursor: pointer; 
+    border: none;
+    font-size: 1rem; 
+    width: 100%;
+    margin-top: 10px;
+}
+
+#addEntry, #c_add { background-color: var(--primary-color); color: #000; }
+#sameAsLast, #saveCompareSettings { background-color: #333; color: #fff; }
+button.danger { background-color: #d32f2f; color: white; }
+
+/* ДЕТАЙЛИ И ТАБЛИЦИ */
+details {
+    margin-top: 20px;
+    background: #0a0a0a;
+    border: 1px solid #222;
+    border-radius: 10px;
+    padding: 10px;
+}
+summary { cursor: pointer; color: #888; font-weight: 500; outline: none; }
+
+/* COMPARE BOX */
+.compare-box {
+    background: #111;
+    border: 1px solid #333;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 20px;
+}
