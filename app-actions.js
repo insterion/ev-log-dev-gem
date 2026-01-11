@@ -1,223 +1,184 @@
-// app-actions.js – add/edit/delete handlers + table click handlers
+/* app-actions.js - Event Listeners */
 
-(function () {
-  const A = window.EVApp;
-  const U = A.U;
+const AppActions = {
+    init: function() {
+        this.bindNav();
+        this.bindLog();
+        this.bindCosts();
+        this.bindSettings();
+        
+        // Initial Render
+        UILog.renderList(App.data.logs);
+        this.renderCostsList();
+        
+        // Set default date to today
+        document.getElementById('date').valueAsDate = new Date();
+        document.getElementById('c_date').valueAsDate = new Date();
+    },
 
-  function resetEditMode() {
-    A.currentEditId = null;
-    const addBtn = A.$("addEntry");
-    if (addBtn) addBtn.textContent = "Add entry";
-  }
+    bindNav: function() {
+        const tabs = document.querySelectorAll('.tabbtn');
+        const sections = document.querySelectorAll('.tab');
 
-  function resetCostEditMode() {
-    A.currentEditCostId = null;
-    const btn = A.$("c_add");
-    if (btn) btn.textContent = "Add cost";
-  }
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                sections.forEach(s => s.classList.remove('active')); // CSS class .active { display: block }
+                
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+    },
 
-  function startEditEntry(id) {
-    if (!id) return U.toast("Missing entry id", "bad");
-    const entry = (A.state.entries || []).find((e) => e.id === id);
-    if (!entry) return U.toast("Entry not found", "bad");
+    bindLog: function() {
+        // 1. ADD ENTRY BUTTON
+        const btnAdd = document.getElementById('addEntry');
+        if (btnAdd) {
+            btnAdd.addEventListener('click', () => {
+                const date = document.getElementById('date').value;
+                const kwh = parseFloat(document.getElementById('kwh').value);
+                const price = parseFloat(document.getElementById('price').value);
+                const type = document.getElementById('type').value;
+                const note = document.getElementById('note').value;
 
-    A.currentEditId = id;
+                if (!date || isNaN(kwh) || isNaN(price)) {
+                    alert('Моля попълнете Дата, kWh и Цена.');
+                    return;
+                }
 
-    A.$("date").value = entry.date || A.todayISO();
-    A.$("kwh").value = entry.kwh;
-    A.$("type").value = entry.type;
-    A.$("price").value = entry.price;
-    A.$("note").value = entry.note || "";
+                App.addLog({
+                    date, kwh, price, type, note,
+                    total: kwh * price
+                });
 
-    const addBtn = A.$("addEntry");
-    if (addBtn) addBtn.textContent = "Update entry";
+                UILog.renderList(App.data.logs);
+                
+                // Clear important fields
+                document.getElementById('kwh').value = '';
+                document.getElementById('note').value = '';
+                document.getElementById('log-preview').innerHTML = ''; // Hide preview
+            });
+        }
 
-    U.toast("Editing entry", "info");
-  }
+        // 2. AUTO PRICE CHANGE
+        document.getElementById('type').addEventListener('change', (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            if (opt.dataset.price) {
+                document.getElementById('price').value = opt.dataset.price;
+                this.updatePreview(); // Recalculate preview
+            }
+        });
 
-  function startEditCost(id) {
-    if (!id) return U.toast("Missing cost id", "bad");
-    const cost = (A.state.costs || []).find((c) => c.id === id);
-    if (!cost) return U.toast("Cost not found", "bad");
+        // 3. REAL-TIME COMPARISON PREVIEW
+        ['kwh', 'price'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => this.updatePreview());
+        });
 
-    A.currentEditCostId = id;
+        // 4. Same as last
+        document.getElementById('sameAsLast').addEventListener('click', () => {
+            if(App.data.logs.length > 0) {
+                const last = App.data.logs[0];
+                document.getElementById('price').value = last.price;
+                document.getElementById('type').value = last.type;
+                document.getElementById('note').value = last.note;
+            }
+        });
+    },
 
-    A.$("c_date").value = cost.date || A.todayISO();
-    A.$("c_category").value = cost.category || "Tyres";
-    A.$("c_amount").value = cost.amount;
-    A.$("c_note").value = cost.note || "";
+    updatePreview: function() {
+        const kwh = parseFloat(document.getElementById('kwh').value) || 0;
+        const price = parseFloat(document.getElementById('price').value) || 0;
+        
+        // Взимаме настройките от App.settings
+        const res = Calc.compare(
+            kwh, 
+            price, 
+            parseFloat(App.settings.evEff), 
+            parseFloat(App.settings.iceMpg), 
+            parseFloat(App.settings.fuelPrice)
+        );
 
-    const appliesSelect = A.$("c_applies");
-    if (appliesSelect) {
-      const v = (cost.applies || "other").toLowerCase();
-      appliesSelect.value = (v === "ev" || v === "ice" || v === "both" || v === "other") ? v : "other";
+        UILog.renderPreview(res);
+    },
+    
+    deleteLogEntry: function(id) {
+        if(confirm('Изтриване?')) {
+            App.deleteLog(id);
+            UILog.renderList(App.data.logs);
+        }
+    },
+
+    // --- COSTS SECTION ---
+    bindCosts: function() {
+        document.getElementById('c_add').addEventListener('click', () => {
+            const date = document.getElementById('c_date').value;
+            const amount = parseFloat(document.getElementById('c_amount').value);
+            const cat = document.getElementById('c_category').value;
+            const note = document.getElementById('c_note').value;
+
+            if(!amount || !date) return alert('Въведи сума и дата');
+
+            App.addCost({ date, amount, cat, note });
+            this.renderCostsList();
+            
+            document.getElementById('c_amount').value = '';
+            document.getElementById('c_note').value = '';
+        });
+    },
+
+    renderCostsList: function() {
+        const div = document.getElementById('costTable');
+        if(!div) return;
+        let html = '';
+        App.data.costs.forEach(c => {
+            html += `<div style="border-bottom:1px solid #333; padding:10px 0; display:flex; justify-content:space-between;">
+                <span>${c.date} <strong>${c.cat}</strong><br><small>${c.note}</small></span>
+                <span>£${c.amount.toFixed(2)} <button onclick="AppActions.deleteCostEntry(${c.id})" style="color:red; border:none; background:none;">x</button></span>
+            </div>`;
+        });
+        div.innerHTML = html || '<p style="color:#666">Няма разходи.</p>';
+    },
+    
+    deleteCostEntry: function(id) {
+        if(confirm('Delete cost?')) {
+            App.deleteCost(id);
+            this.renderCostsList();
+        }
+    },
+
+    // --- SETTINGS SECTION ---
+    bindSettings: function() {
+        // Load settings into inputs
+        const s = App.settings;
+        if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = s.evEff;
+        if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = s.iceMpg;
+        if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = s.fuelPrice;
+
+        // Save Button
+        const btnSave = document.getElementById('saveCompareSettings');
+        if(btnSave) {
+            btnSave.addEventListener('click', () => {
+                App.settings.evEff = parseFloat(document.getElementById('set_ev_eff').value);
+                App.settings.iceMpg = parseFloat(document.getElementById('set_ice_mpg').value);
+                App.settings.fuelPrice = parseFloat(document.getElementById('set_fuel_price').value);
+                App.save();
+                alert('Настройките са запазени!');
+            });
+        }
+        
+        // Export
+        document.getElementById('exportBackup').addEventListener('click', () => {
+             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(App.data));
+             const a = document.createElement('a');
+             a.href = dataStr;
+             a.download = "ev_backup.json";
+             a.click();
+        });
     }
+};
 
-    const btn = A.$("c_add");
-    if (btn) btn.textContent = "Update cost";
-
-    U.toast("Editing cost", "info");
-  }
-
-  function getAppliesFromForm() {
-    const el = A.$("c_applies");
-    if (!el) return "other";
-    const v = (el.value || "").toLowerCase();
-    return (v === "ev" || v === "ice" || v === "both" || v === "other") ? v : "other";
-  }
-
-  function onAddEntry() {
-    const date = A.$("date").value || A.todayISO();
-    const kwh = parseFloat(A.$("kwh").value);
-    const type = A.$("type").value;
-    let price = parseFloat(A.$("price").value);
-    const note = (A.$("note").value || "").trim();
-
-    if (isNaN(kwh) || kwh <= 0) return U.toast("Please enter kWh", "bad");
-
-    if (isNaN(price) || price <= 0) price = A.autoPriceForType(type);
-
-    if (!A.currentEditId) {
-      const entry = {
-        id: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : "e_" + Date.now().toString(36),
-        date, kwh, type, price, note
-      };
-      A.state.entries.push(entry);
-      A.saveState();
-      A.Render.renderAll();
-      U.toast("Entry added", "good");
-      return;
-    }
-
-    const idx = A.state.entries.findIndex((e) => e.id === A.currentEditId);
-    if (idx === -1) {
-      U.toast("Entry to update not found", "bad");
-      return resetEditMode();
-    }
-
-    const entry = A.state.entries[idx];
-    entry.date = date;
-    entry.kwh = kwh;
-    entry.type = type;
-    entry.price = price;
-    entry.note = note;
-
-    A.saveState();
-    A.Render.renderAll();
-    U.toast("Entry updated", "good");
-    resetEditMode();
-  }
-
-  function onSameAsLast() {
-    if (!A.state.entries.length) return U.toast("No previous entry", "info");
-    const last = A.state.entries[A.state.entries.length - 1];
-
-    A.$("date").value = last.date;
-    A.$("kwh").value = last.kwh;
-    A.$("type").value = last.type;
-    A.$("price").value = last.price;
-    A.$("note").value = last.note || "";
-
-    U.toast("Filled from last", "info");
-  }
-
-  function onAddCost() {
-    const date = A.$("c_date").value || A.todayISO();
-    const category = A.$("c_category").value;
-    const amount = parseFloat(A.$("c_amount").value);
-    const note = (A.$("c_note").value || "").trim();
-    const applies = getAppliesFromForm();
-
-    if (isNaN(amount) || amount <= 0) return U.toast("Please enter amount", "bad");
-
-    if (!A.currentEditCostId) {
-      const cost = {
-        id: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : "c_" + Date.now().toString(36),
-        date, category, amount, note, applies
-      };
-      A.state.costs.push(cost);
-      A.saveState();
-      A.Render.renderAll();
-      U.toast("Cost added", "good");
-      return;
-    }
-
-    const idx = A.state.costs.findIndex((c) => c.id === A.currentEditCostId);
-    if (idx === -1) {
-      U.toast("Cost to update not found", "bad");
-      return resetCostEditMode();
-    }
-
-    const cost = A.state.costs[idx];
-    cost.date = date;
-    cost.category = category;
-    cost.amount = amount;
-    cost.note = note;
-    cost.applies = applies;
-
-    A.saveState();
-    A.Render.renderAll();
-    U.toast("Cost updated", "good");
-    resetCostEditMode();
-  }
-
-  function handleDeleteEntry(id) {
-    if (!id) return U.toast("Missing entry id", "bad");
-    const idx = A.state.entries.findIndex((e) => e.id === id);
-    if (idx === -1) return U.toast("Entry not found", "bad");
-    if (!window.confirm("Delete this entry?")) return;
-
-    A.state.entries.splice(idx, 1);
-    if (A.currentEditId === id) resetEditMode();
-    A.saveState();
-    A.Render.renderAll();
-    U.toast("Entry deleted", "good");
-  }
-
-  function handleDeleteCost(id) {
-    if (!id) return U.toast("Missing cost id", "bad");
-    const idx = A.state.costs.findIndex((c) => c.id === id);
-    if (idx === -1) return U.toast("Cost not found", "bad");
-    if (!window.confirm("Delete this cost?")) return;
-
-    A.state.costs.splice(idx, 1);
-    if (A.currentEditCostId === id) resetCostEditMode();
-    A.saveState();
-    A.Render.renderAll();
-    U.toast("Cost deleted", "good");
-  }
-
-  function onLogTableClick(ev) {
-    const btn = ev.target && ev.target.closest && ev.target.closest("button[data-action]");
-    if (!btn) return;
-
-    const action = btn.getAttribute("data-action");
-    const id = btn.getAttribute("data-id");
-
-    if (action === "delete-entry") handleDeleteEntry(id);
-    else if (action === "edit-entry") startEditEntry(id);
-  }
-
-  function onCostTableClick(ev) {
-    const btn = ev.target && ev.target.closest && ev.target.closest("button[data-action]");
-    if (!btn) return;
-
-    const action = btn.getAttribute("data-action");
-    const id = btn.getAttribute("data-id");
-
-    if (action === "delete-cost") handleDeleteCost(id);
-    else if (action === "edit-cost") startEditCost(id);
-  }
-
-  window.EVApp.Actions = {
-    resetEditMode,
-    resetCostEditMode,
-    onAddEntry,
-    onSameAsLast,
-    onAddCost,
-    onLogTableClick,
-    onCostTableClick,
-    startEditEntry,
-    startEditCost
-  };
-})();
+// Start everything when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    AppActions.init();
+});
