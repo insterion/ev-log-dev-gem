@@ -1,102 +1,61 @@
-// ui-log.js – render charging log table (newest first)
+/* ui-log.js - Rendering Log & Previews */
 
-(function () {
-  const U = window.EVUI;
+const UILog = {
+    // Рендира таблицата с историята
+    renderList: function(logs) {
+        const container = document.getElementById('logTable');
+        if (!container) return;
 
-  function renderLogTable(containerId, entries) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
+        if (logs.length === 0) {
+            container.innerHTML = '<p style="color:#666; text-align:center;">Няма записи.</p>';
+            return;
+        }
 
-    const list = Array.isArray(entries) ? entries : [];
+        let html = '';
+        logs.forEach(log => {
+            html += `
+            <div style="border-bottom:1px solid #333; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:bold; color:#fff;">${log.kwh} kWh <span style="color:#aaa; font-weight:normal;">• £${log.total.toFixed(2)}</span></div>
+                    <div style="font-size:0.85em; color:#888;">${log.date} • ${log.type}</div>
+                    <div style="font-size:0.85em; color:#666;">${log.note || ''}</div>
+                </div>
+                <button onclick="AppActions.deleteLogEntry(${log.id})" style="background:none; border:none; color:#f44336; font-size:1.2em; cursor:pointer;">&times;</button>
+            </div>`;
+        });
+        container.innerHTML = html;
+    },
 
-    if (!list.length) {
-      el.innerHTML = "<p>No entries yet.</p>";
-      return;
+    // Рендира карето за сравнение (докато пишеш)
+    renderPreview: function(calcResult) {
+        const div = document.getElementById('log-preview');
+        if (!div) return;
+
+        if (!calcResult || calcResult.rangeMiles <= 0) {
+            div.innerHTML = '';
+            div.style.display = 'none';
+            return;
+        }
+
+        const color = calcResult.isCheaper ? '#4CAF50' : '#f44336';
+        const text = calcResult.isCheaper ? 'СПЕСТЯВАШ' : 'ЗАГУБА';
+
+        div.style.display = 'block';
+        div.innerHTML = `
+            <div style="background: #1a1a1a; border: 1px solid ${color}; border-radius: 8px; padding: 10px; animation: fadeIn 0.3s;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9em; color:#ccc;">
+                    <span>EV: <strong>£${calcResult.costEV.toFixed(2)}</strong></span>
+                    <span>ICE: <strong>£${calcResult.costICE.toFixed(2)}</strong></span>
+                </div>
+                <div style="text-align:center;">
+                    <span style="color:${color}; font-weight:bold; font-size:1.1em;">
+                        ${text} £${Math.abs(calcResult.savings).toFixed(2)}
+                    </span>
+                    <div style="font-size:0.8em; color:#666; margin-top:2px;">
+                        при пробег ~${calcResult.rangeMiles.toFixed(0)} mi
+                    </div>
+                </div>
+            </div>
+        `;
     }
-
-    const rows = list
-      .slice()
-      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((e) => {
-        const typeLabel =
-          e.type === "public"
-            ? "Public"
-            : e.type === "public-xp"
-            ? "Public xp"
-            : e.type === "home"
-            ? "Home"
-            : "Home xp";
-
-        const cost = (Number(e.kwh) || 0) * (Number(e.price) || 0);
-        const safeNote = U.escapeHTML(e.note || "");
-        const idAttr = e.id ? String(e.id) : "";
-
-        return `<tr>
-          <td>${U.fmtDate(e.date)}</td>
-          <td>${U.fmtNum(e.kwh, 1)}</td>
-          <td><span class="badge">${typeLabel}</span></td>
-          <td>${U.fmtGBP(cost)}</td>
-          <td>${safeNote}</td>
-          <td class="actcol">
-            <button type="button" class="btn-mini" data-action="edit-entry" data-id="${idAttr}" aria-label="Edit">
-              <span class="ico">✎</span><span class="txt"> Edit</span>
-            </button>
-            <button type="button" class="btn-mini danger" data-action="delete-entry" data-id="${idAttr}" aria-label="Delete">✕</button>
-          </td>
-        </tr>`;
-      });
-
-    const totalKwh = list.reduce((s, e) => s + (Number(e.kwh) || 0), 0);
-    const totalCost = list.reduce(
-      (s, e) => s + (Number(e.kwh) || 0) * (Number(e.price) || 0),
-      0
-    );
-    const sessions = list.length;
-
-    const summaryBlock = `
-      <details open style="margin:4px 0 8px;">
-        <summary style="cursor:pointer;color:#cccccc;">
-          <strong>Total so far</strong>
-        </summary>
-        <div style="margin-top:6px;font-size:0.85rem;color:#cccccc;">
-          <p style="margin:0;">
-            <strong>${U.fmtNum(totalKwh, 1)} kWh</strong> •
-            <strong>${U.fmtGBP(totalCost)}</strong> •
-            <strong>${sessions}</strong> sessions
-          </p>
-        </div>
-      </details>
-    `;
-
-    el.innerHTML = `
-      ${summaryBlock}
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>kWh</th>
-            <th>Type</th>
-            <th>£</th>
-            <th>Note</th>
-            <th class="actcol">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.join("")}
-        </tbody>
-        <tfoot>
-          <tr class="total-row">
-            <td>Total</td>
-            <td>${U.fmtNum(totalKwh, 1)}</td>
-            <td></td>
-            <td>${U.fmtGBP(totalCost)}</td>
-            <td></td>
-            <td class="actcol"></td>
-          </tr>
-        </tfoot>
-      </table>
-    `;
-  }
-
-  window.EVUI.renderLogTable = renderLogTable;
-})();
+};
