@@ -1,12 +1,12 @@
-/* app-actions.js - Event Listeners */
+/* app-actions.js - FINAL VERSION */
 
 const AppActions = {
     init: function() {
-        console.log("AppActions init...");
-        this.bindNav();      // <-- Това оправя табовете
+        this.bindNav();
         this.bindLog();
         this.bindCosts();
         this.bindSettings();
+        this.bindCompare(); // <--- НОВО: Зареждаме логиката за сравнение
         
         // Render history
         if(typeof UILog !== 'undefined') {
@@ -20,32 +20,24 @@ const AppActions = {
         if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
     },
 
-    // --- ЛОГИКА ЗА ТАБОВЕТЕ ---
     bindNav: function() {
         const tabs = document.querySelectorAll('.tabbtn');
         const sections = document.querySelectorAll('.tab');
 
         tabs.forEach(btn => {
             btn.addEventListener('click', () => {
-                // 1. Махаме active от всички бутони и секции
                 tabs.forEach(t => t.classList.remove('active'));
                 sections.forEach(s => s.classList.remove('active'));
                 
-                // 2. Слагаме active на натиснатия бутон
                 btn.classList.add('active');
-                
-                // 3. Намираме съответната секция по data-tab и я показваме
                 const targetId = btn.getAttribute('data-tab');
                 const targetSection = document.getElementById(targetId);
-                if (targetSection) {
-                    targetSection.classList.add('active');
-                }
+                if (targetSection) targetSection.classList.add('active');
             });
         });
     },
 
     bindLog: function() {
-        // Add Entry
         const btnAdd = document.getElementById('addEntry');
         if (btnAdd) {
             btnAdd.addEventListener('click', () => {
@@ -63,33 +55,29 @@ const AppActions = {
                 App.addLog({ date, kwh, price, type, note, total: kwh * price });
                 UILog.renderList(App.data.logs);
                 
-                // Clear fields
+                // Clear fields & hide preview
                 document.getElementById('kwh').value = '';
                 document.getElementById('note').value = '';
                 document.getElementById('log-preview').style.display = 'none';
             });
         }
 
-        // Auto Price fill
-        const typeSelect = document.getElementById('type');
-        if(typeSelect) {
-            typeSelect.addEventListener('change', (e) => {
-                const opt = e.target.options[e.target.selectedIndex];
-                if (opt.dataset.price) {
-                    document.getElementById('price').value = opt.dataset.price;
-                    this.updatePreview();
-                }
-            });
-        }
-
-        // Live Preview
+        // Live Preview Logic
         const inputs = ['kwh', 'price'];
         inputs.forEach(id => {
             const el = document.getElementById(id);
             if(el) el.addEventListener('input', () => this.updatePreview());
         });
+        
+        // Update price when dropdown changes
+        document.getElementById('type').addEventListener('change', (e) => {
+             const opt = e.target.options[e.target.selectedIndex];
+             if(opt.dataset.price) {
+                 document.getElementById('price').value = opt.dataset.price;
+                 this.updatePreview();
+             }
+        });
 
-        // Same as last
         const btnSame = document.getElementById('sameAsLast');
         if(btnSame) {
             btnSame.addEventListener('click', () => {
@@ -136,7 +124,6 @@ const AppActions = {
                 const note = document.getElementById('c_note').value;
 
                 if(!amount || !date) return alert('Enter amount and date');
-
                 App.addCost({ date, amount, cat, note });
                 this.renderCostsList();
                 
@@ -176,13 +163,56 @@ const AppActions = {
         }
     },
 
+    // --- НОВО: Логика за Compare таба ---
+    bindCompare: function() {
+        const btnCalc = document.getElementById('btn-calc-trip');
+        if (btnCalc) {
+            btnCalc.addEventListener('click', () => {
+                const dist = parseFloat(document.getElementById('cmp-dist').value);
+                if (!dist) { alert('Въведи мили'); return; }
+
+                // Взимаме настройките
+                const evEff = parseFloat(App.settings.evEff);
+                const iceMpg = parseFloat(App.settings.iceMpg);
+                const fuelPrice = parseFloat(App.settings.fuelPrice);
+                
+                // Взимаме текущата цена на тока от Log таба (или 0.56 по подразбиране)
+                const evPrice = parseFloat(document.getElementById('price').value) || 0.56;
+
+                // Сметки
+                const kwhNeeded = dist / evEff;
+                const costEV = kwhNeeded * evPrice;
+                
+                const gallons = dist / iceMpg;
+                const liters = gallons * 4.54609;
+                const costICE = liters * fuelPrice;
+                
+                const diff = costICE - costEV;
+                const isCheaper = diff > 0;
+
+                // Показване
+                const resDiv = document.getElementById('compare-result');
+                resDiv.innerHTML = `
+                    <div style="background:#222; border-left: 4px solid ${isCheaper ? '#4CAF50' : '#f44336'}; padding:15px; margin-top:20px; border-radius:4px;">
+                        <h4 style="margin:0 0 10px 0; color:#fff;">Резултат за ${dist} мили</h4>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:#ccc;">
+                            <span>🔋 EV: <strong>£${costEV.toFixed(2)}</strong></span>
+                            <span>⛽ ICE: <strong>£${costICE.toFixed(2)}</strong></span>
+                        </div>
+                        <div style="font-size:1.1em; font-weight:bold; color:${isCheaper ? '#4CAF50' : '#f44336'}">
+                            ${isCheaper ? 'Спестяваш' : 'По-скъпо с'} £${Math.abs(diff).toFixed(2)}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    },
+
     bindSettings: function() {
-        // Load Settings
         if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = App.settings.evEff;
         if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = App.settings.iceMpg;
         if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = App.settings.fuelPrice;
 
-        // Save
         const btnSave = document.getElementById('saveCompareSettings');
         if(btnSave) {
             btnSave.addEventListener('click', () => {
@@ -194,7 +224,6 @@ const AppActions = {
             });
         }
         
-        // Export
         const btnExport = document.getElementById('exportBackup');
         if(btnExport) {
             btnExport.addEventListener('click', () => {
@@ -208,7 +237,6 @@ const AppActions = {
     }
 };
 
-// Start
 document.addEventListener('DOMContentLoaded', () => {
     AppActions.init();
 });
