@@ -21,6 +21,9 @@
   </nav>
 
   <section id="log" class="tab active">
+    
+    <div id="log-preview" style="display:none; margin-bottom:15px;"></div>
+
     <div class="section-block">
       <label>Дата</label>
       <input type="date" id="date" />
@@ -30,8 +33,6 @@
       <label>kWh (Заредено)</label>
       <input type="number" id="kwh" placeholder="40" step="0.1" inputmode="decimal" />
     </div>
-
-    <div id="log-preview" style="margin-bottom: 15px;"></div>
 
     <div class="section-block">
       <label>Тип</label>
@@ -53,16 +54,19 @@
       <input type="text" id="note" placeholder="Location / Note..." />
     </div>
 
-    <button id="addEntry">Add Entry</button>
-    <button id="sameAsLast" style="background-color: #333;">Same as last</button>
+    <div style="display:flex; gap:10px;">
+        <button id="addEntry">Add Entry</button>
+        <button id="sameAsLast" style="background:#222;">Same as last</button>
+    </div>
 
-    <details id="logDetails" style="margin-top:20px;">
+    <details id="logDetails">
       <summary>История на зареждане</summary>
-      <div id="logTable"></div>
+      <div id="logTable" style="margin-top:10px;"></div>
     </details>
   </section>
 
   <section id="costs" class="tab">
+    <h3>Добави разход</h3>
     <div class="section-block">
       <label>Дата</label>
       <input type="date" id="c_date" />
@@ -75,6 +79,7 @@
         <option value="Service">Service</option>
         <option value="Insurance">Insurance</option>
         <option value="Tax">Tax/MOT</option>
+        <option value="Accessories">Accessories</option>
         <option value="Other">Other</option>
       </select>
     </div>
@@ -90,44 +95,60 @@
     </div>
 
     <button id="c_add">Add Cost</button>
+    
     <div id="costTable" style="margin-top:20px;"></div>
   </section>
 
   <section id="compare" class="tab">
-    <h2>EV vs ICE Settings</h2>
-    <p style="color:#aaa; font-size:0.9em;">Тези настройки се използват за изчисленията.</p>
-
-    <div class="section-block">
-      <label>EV Ефективност (mi/kWh)</label>
-      <input type="number" id="set_ev_eff" placeholder="3.0" value="3.0" step="0.1">
+    <h3>Калкулатор за пътуване</h3>
+    <p style="color:#aaa; font-size:0.9em;">Симулация на разход за конкретно пътуване.</p>
+    
+    <div class="compare-box">
+        <label>Разстояние (мили)</label>
+        <input type="number" id="cmp-dist" placeholder="100" style="text-align:center;">
+        <button id="btn-calc-trip" style="margin-top:10px;">Изчисли</button>
     </div>
 
-    <div class="section-block">
-      <label>ICE Разход (MPG)</label>
-      <input type="number" id="set_ice_mpg" placeholder="44" value="44" step="1">
-    </div>
-
-    <div class="section-block">
-      <label>Цена Гориво (£/Liter)</label>
-      <input type="number" id="set_fuel_price" placeholder="1.45" value="1.45" step="0.01">
-    </div>
-
-    <button id="saveCompareSettings">Save Settings</button>
+    <div id="compare-result"></div>
   </section>
 
   <section id="settings" class="tab">
-    <h2>Data Management</h2>
-    <button id="exportBackup">⬇️ Export JSON</button>
-    <div style="margin-top:15px;">
-        <label>Import JSON</label>
-        <input type="file" id="importBackup" />
+    
+    <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
+        <h3 style="margin-top:0;">🏎️ EV vs ICE Настройки</h3>
+        <p style="font-size:0.8rem; color:#888;">Използват се за автоматичните сравнения.</p>
+
+        <div class="section-block">
+          <label>EV Ефективност (mi/kWh)</label>
+          <input type="number" id="set_ev_eff" placeholder="3.0" value="3.0" step="0.1">
+        </div>
+
+        <div class="section-block">
+          <label>ICE Разход (MPG)</label>
+          <input type="number" id="set_ice_mpg" placeholder="44" value="44" step="1">
+        </div>
+
+        <div class="section-block">
+          <label>Цена Гориво (£/Liter)</label>
+          <input type="number" id="set_fuel_price" placeholder="1.45" value="1.45" step="0.01">
+        </div>
+
+        <button id="saveCompareSettings">Save Settings</button>
     </div>
+
+    <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333;">
+        <h3 style="margin-top:0;">💾 Backup Data</h3>
+        <button id="exportBackup" style="background:#333;">⬇️ Export JSON</button>
+        <div style="margin-top:15px;">
+            <label>Import JSON</label>
+            <input type="file" id="importBackup" />
+        </div>
+    </div>
+
   </section>
 
   <script src="calc.js"></script>
-  
   <script src="ui-log.js"></script>
-  
   <script src="app-core.js"></script>
   <script src="app-actions.js"></script>
 
