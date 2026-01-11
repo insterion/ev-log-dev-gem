@@ -2,37 +2,50 @@
 
 const AppActions = {
     init: function() {
-        this.bindNav();
+        console.log("AppActions init...");
+        this.bindNav();      // <-- Това оправя табовете
         this.bindLog();
         this.bindCosts();
         this.bindSettings();
         
-        // Initial Render
-        UILog.renderList(App.data.logs);
+        // Render history
+        if(typeof UILog !== 'undefined') {
+            UILog.renderList(App.data.logs);
+        }
         this.renderCostsList();
-        
-        // Set default date to today
-        document.getElementById('date').valueAsDate = new Date();
-        document.getElementById('c_date').valueAsDate = new Date();
+
+        // Default dates
+        const today = new Date().toISOString().split('T')[0];
+        if(document.getElementById('date')) document.getElementById('date').value = today;
+        if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
     },
 
+    // --- ЛОГИКА ЗА ТАБОВЕТЕ ---
     bindNav: function() {
         const tabs = document.querySelectorAll('.tabbtn');
         const sections = document.querySelectorAll('.tab');
 
         tabs.forEach(btn => {
             btn.addEventListener('click', () => {
+                // 1. Махаме active от всички бутони и секции
                 tabs.forEach(t => t.classList.remove('active'));
-                sections.forEach(s => s.classList.remove('active')); // CSS class .active { display: block }
+                sections.forEach(s => s.classList.remove('active'));
                 
+                // 2. Слагаме active на натиснатия бутон
                 btn.classList.add('active');
-                document.getElementById(btn.dataset.tab).classList.add('active');
+                
+                // 3. Намираме съответната секция по data-tab и я показваме
+                const targetId = btn.getAttribute('data-tab');
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) {
+                    targetSection.classList.add('active');
+                }
             });
         });
     },
 
     bindLog: function() {
-        // 1. ADD ENTRY BUTTON
+        // Add Entry
         const btnAdd = document.getElementById('addEntry');
         if (btnAdd) {
             btnAdd.addEventListener('click', () => {
@@ -43,101 +56,117 @@ const AppActions = {
                 const note = document.getElementById('note').value;
 
                 if (!date || isNaN(kwh) || isNaN(price)) {
-                    alert('Моля попълнете Дата, kWh и Цена.');
+                    alert('Please fill Date, kWh and Price.');
                     return;
                 }
 
-                App.addLog({
-                    date, kwh, price, type, note,
-                    total: kwh * price
-                });
-
+                App.addLog({ date, kwh, price, type, note, total: kwh * price });
                 UILog.renderList(App.data.logs);
                 
-                // Clear important fields
+                // Clear fields
                 document.getElementById('kwh').value = '';
                 document.getElementById('note').value = '';
-                document.getElementById('log-preview').innerHTML = ''; // Hide preview
+                document.getElementById('log-preview').style.display = 'none';
             });
         }
 
-        // 2. AUTO PRICE CHANGE
-        document.getElementById('type').addEventListener('change', (e) => {
-            const opt = e.target.options[e.target.selectedIndex];
-            if (opt.dataset.price) {
-                document.getElementById('price').value = opt.dataset.price;
-                this.updatePreview(); // Recalculate preview
-            }
+        // Auto Price fill
+        const typeSelect = document.getElementById('type');
+        if(typeSelect) {
+            typeSelect.addEventListener('change', (e) => {
+                const opt = e.target.options[e.target.selectedIndex];
+                if (opt.dataset.price) {
+                    document.getElementById('price').value = opt.dataset.price;
+                    this.updatePreview();
+                }
+            });
+        }
+
+        // Live Preview
+        const inputs = ['kwh', 'price'];
+        inputs.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.addEventListener('input', () => this.updatePreview());
         });
 
-        // 3. REAL-TIME COMPARISON PREVIEW
-        ['kwh', 'price'].forEach(id => {
-            document.getElementById(id).addEventListener('input', () => this.updatePreview());
-        });
-
-        // 4. Same as last
-        document.getElementById('sameAsLast').addEventListener('click', () => {
-            if(App.data.logs.length > 0) {
-                const last = App.data.logs[0];
-                document.getElementById('price').value = last.price;
-                document.getElementById('type').value = last.type;
-                document.getElementById('note').value = last.note;
-            }
-        });
+        // Same as last
+        const btnSame = document.getElementById('sameAsLast');
+        if(btnSame) {
+            btnSame.addEventListener('click', () => {
+                if(App.data.logs.length > 0) {
+                    const last = App.data.logs[0];
+                    document.getElementById('price').value = last.price;
+                    document.getElementById('type').value = last.type;
+                    document.getElementById('note').value = last.note;
+                }
+            });
+        }
     },
 
     updatePreview: function() {
         const kwh = parseFloat(document.getElementById('kwh').value) || 0;
         const price = parseFloat(document.getElementById('price').value) || 0;
         
-        // Взимаме настройките от App.settings
-        const res = Calc.compare(
-            kwh, 
-            price, 
-            parseFloat(App.settings.evEff), 
-            parseFloat(App.settings.iceMpg), 
-            parseFloat(App.settings.fuelPrice)
-        );
-
-        UILog.renderPreview(res);
+        if(typeof Calc !== 'undefined') {
+            const res = Calc.compare(
+                kwh, 
+                price, 
+                parseFloat(App.settings.evEff), 
+                parseFloat(App.settings.iceMpg), 
+                parseFloat(App.settings.fuelPrice)
+            );
+            UILog.renderPreview(res);
+        }
     },
     
     deleteLogEntry: function(id) {
-        if(confirm('Изтриване?')) {
+        if(confirm('Delete log?')) {
             App.deleteLog(id);
             UILog.renderList(App.data.logs);
         }
     },
 
-    // --- COSTS SECTION ---
     bindCosts: function() {
-        document.getElementById('c_add').addEventListener('click', () => {
-            const date = document.getElementById('c_date').value;
-            const amount = parseFloat(document.getElementById('c_amount').value);
-            const cat = document.getElementById('c_category').value;
-            const note = document.getElementById('c_note').value;
+        const btnAddCost = document.getElementById('c_add');
+        if(btnAddCost) {
+            btnAddCost.addEventListener('click', () => {
+                const date = document.getElementById('c_date').value;
+                const amount = parseFloat(document.getElementById('c_amount').value);
+                const cat = document.getElementById('c_category').value;
+                const note = document.getElementById('c_note').value;
 
-            if(!amount || !date) return alert('Въведи сума и дата');
+                if(!amount || !date) return alert('Enter amount and date');
 
-            App.addCost({ date, amount, cat, note });
-            this.renderCostsList();
-            
-            document.getElementById('c_amount').value = '';
-            document.getElementById('c_note').value = '';
-        });
+                App.addCost({ date, amount, cat, note });
+                this.renderCostsList();
+                
+                document.getElementById('c_amount').value = '';
+                document.getElementById('c_note').value = '';
+            });
+        }
     },
 
     renderCostsList: function() {
         const div = document.getElementById('costTable');
         if(!div) return;
         let html = '';
+        if(App.data.costs.length === 0) {
+            div.innerHTML = '<p style="color:#666; font-size:0.9rem;">Няма записани разходи.</p>';
+            return;
+        }
         App.data.costs.forEach(c => {
-            html += `<div style="border-bottom:1px solid #333; padding:10px 0; display:flex; justify-content:space-between;">
-                <span>${c.date} <strong>${c.cat}</strong><br><small>${c.note}</small></span>
-                <span>£${c.amount.toFixed(2)} <button onclick="AppActions.deleteCostEntry(${c.id})" style="color:red; border:none; background:none;">x</button></span>
+            html += `<div style="border-bottom:1px solid #333; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="color:#fff;">${c.date} • <strong>${c.cat}</strong></span><br>
+                    <small style="color:#888;">${c.note}</small>
+                </div>
+                <div>
+                    <span style="color:#fff; font-weight:bold; margin-right:10px;">£${c.amount.toFixed(2)}</span>
+                    <button onclick="AppActions.deleteCostEntry(${c.id})" style="color:#d32f2f; border:none; background:none; font-size:1.2rem;">&times;</button>
+                </div>
             </div>`;
         });
-        div.innerHTML = html || '<p style="color:#666">Няма разходи.</p>';
+        div.innerHTML = html;
     },
     
     deleteCostEntry: function(id) {
@@ -147,15 +176,13 @@ const AppActions = {
         }
     },
 
-    // --- SETTINGS SECTION ---
     bindSettings: function() {
-        // Load settings into inputs
-        const s = App.settings;
-        if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = s.evEff;
-        if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = s.iceMpg;
-        if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = s.fuelPrice;
+        // Load Settings
+        if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = App.settings.evEff;
+        if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = App.settings.iceMpg;
+        if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = App.settings.fuelPrice;
 
-        // Save Button
+        // Save
         const btnSave = document.getElementById('saveCompareSettings');
         if(btnSave) {
             btnSave.addEventListener('click', () => {
@@ -168,17 +195,20 @@ const AppActions = {
         }
         
         // Export
-        document.getElementById('exportBackup').addEventListener('click', () => {
-             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(App.data));
-             const a = document.createElement('a');
-             a.href = dataStr;
-             a.download = "ev_backup.json";
-             a.click();
-        });
+        const btnExport = document.getElementById('exportBackup');
+        if(btnExport) {
+            btnExport.addEventListener('click', () => {
+                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(App.data));
+                 const a = document.createElement('a');
+                 a.href = dataStr;
+                 a.download = "ev_backup.json";
+                 a.click();
+            });
+        }
     }
 };
 
-// Start everything when DOM is ready
+// Start
 document.addEventListener('DOMContentLoaded', () => {
     AppActions.init();
 });
