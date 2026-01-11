@@ -1,58 +1,41 @@
-/* file: calc.js */
+/* calc.js - Mathematical logic */
 const Calc = {
-    // Стандартни настройки (ако потребителят не е въвел нищо)
-    DEFAULTS: {
-        EV_EFFICIENCY: 3.0, // mi/kWh
-        ICE_MPG: 44.0,      // Miles per Gallon
-        PRICE_KWH: 0.25,    // £/kWh
-        PRICE_FUEL: 1.45    // £/liter (или 6.50 за галон, ще го уточним в UI)
-    },
+    // Конвертиране
+    litersToGallons: (l) => l / 4.54609,
+    gallonsToLiters: (g) => g * 4.54609,
 
     /**
-     * Превръща галони в литри и обратно (полезно ако цената е на литър, а разхода в MPG)
-     * 1 UK Gallon = 4.54609 Liters
+     * Сравнява EV и ICE за дадено количество ток
+     * @param {number} kwh - Зареден ток
+     * @param {number} evPrice - Цена на тока (£/kWh)
+     * @param {number} evEff - Ефективност (mi/kWh)
+     * @param {number} iceMpg - Разход на старата кола (MPG)
+     * @param {number} fuelPriceLiter - Цена на горивото (£/L)
      */
-    convert: {
-        galToLiters: (gal) => gal * 4.54609,
-        litersToGal: (l) => l / 4.54609
-    },
+    compare: function(kwh, evPrice, evEff, iceMpg, fuelPriceLiter) {
+        // 1. Колко мили ще минем с този ток?
+        const range = kwh * evEff;
 
-    /**
-     * Основна функция за сравнение
-     */
-    analyze: function(kwh, efficiency, priceKwh, mpg, priceFuelPerGallon) {
-        // 1. Пробег с този ток
-        const range = kwh * efficiency;
+        // 2. Колко струва това с EV?
+        const costEV = kwh * evPrice;
 
-        // 2. Разход за EV
-        const costEV = kwh * priceKwh;
-        const costPerMileEV = range > 0 ? costEV / range : 0;
+        // 3. Колко гориво (литри) ни трябват за същите мили?
+        // Gallons needed = Miles / MPG
+        const gallons = iceMpg > 0 ? range / iceMpg : 0;
+        const liters = gallons * 4.54609;
 
-        // 3. Разход за ДВГ (ICE) за същото разстояние
-        // Колко галона са нужни за това разстояние?
-        const gallonsNeeded = mpg > 0 ? range / mpg : 0;
-        const costICE = gallonsNeeded * priceFuelPerGallon;
-        const costPerMileICE = range > 0 ? costICE / range : 0;
+        // 4. Колко струва това с ДВГ?
+        const costICE = liters * fuelPriceLiter;
 
-        // 4. Сравнение
-        const savings = costICE - costEV;
-        
+        // 5. Разлика
+        const diff = costICE - costEV;
+
         return {
             rangeMiles: range,
-            ev: {
-                totalCost: costEV,
-                costPerMile: costPerMileEV
-            },
-            ice: {
-                totalCost: costICE,
-                costPerMile: costPerMileICE,
-                gallonsConsumed: gallonsNeeded
-            },
-            diff: {
-                value: savings,
-                isCheaper: savings > 0,
-                percent: costICE > 0 ? (savings / costICE) * 100 : 0
-            }
+            costEV: costEV,
+            costICE: costICE,
+            savings: diff,
+            isCheaper: diff > 0
         };
     }
 };
