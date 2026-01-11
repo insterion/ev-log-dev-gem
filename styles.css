@@ -126,3 +126,13 @@ summary { cursor: pointer; color: #888; font-weight: 500; outline: none; }
     text-align: center;
     margin-bottom: 20px;
 }
+/* Разкрасяване на списъка с история */
+#logTable > div, #costTable > div {
+    background-color: #1a1a1a; /* Леко по-светъл фон от черното */
+    margin-bottom: 8px;        /* Разстояние между редовете */
+    padding: 12px;             /* Въздух вътре в кутийката */
+    border-radius: 8px;        /* Заоблени ъгли */
+    border-bottom: none !important; /* Махаме старата черта */
+    border-left: 3px solid #00b341; /* Зелена черта отляво за акцент */
+}
+
