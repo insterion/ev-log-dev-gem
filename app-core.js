@@ -1,24 +1,33 @@
-/* app-core.js - State Management */
+/* app-core.js - Data & Storage Management */
+
 const App = {
     data: {
-        logs: [],
-        costs: []
+        logs: [],   // История на зареждане
+        costs: []   // История на разходи
     },
     settings: {
-        evEff: 3.0,
-        iceMpg: 44,
-        fuelPrice: 1.45 // £/Liter
+        evEff: 3.5,     // Miles per kWh
+        iceMpg: 40,     // Miles per Gallon
+        fuelPrice: 1.45 // GBP per Liter
     },
-
+    
+    // Зареждане при старт
     init: function() {
-        this.load();
-    },
+        const savedData = localStorage.getItem('ev_log_data');
+        if (savedData) {
+            try {
+                this.data = JSON.parse(savedData);
+            } catch (e) {
+                console.error('Error parsing data', e);
+            }
+        }
 
-    load: function() {
-        const d = localStorage.getItem('ev_log_data');
-        const s = localStorage.getItem('ev_log_settings');
-        if (d) this.data = JSON.parse(d);
-        if (s) this.settings = JSON.parse(s);
+        const savedSettings = localStorage.getItem('ev_log_settings');
+        if (savedSettings) {
+            try {
+                this.settings = JSON.parse(savedSettings);
+            } catch (e) { console.error(e); }
+        }
     },
 
     save: function() {
@@ -26,26 +35,27 @@ const App = {
         localStorage.setItem('ev_log_settings', JSON.stringify(this.settings));
     },
 
+    // --- LOG METHODS ---
     addLog: function(entry) {
-        // Добавя ID и timestamp
-        entry.id = Date.now();
-        this.data.logs.unshift(entry); // Най-новите отгоре
+        entry.id = Date.now(); // Unique ID based on timestamp
+        this.data.logs.unshift(entry); // Add to top
         this.save();
     },
 
+    deleteLog: function(id) {
+        this.data.logs = this.data.logs.filter(item => item.id !== id);
+        this.save();
+    },
+
+    // --- COST METHODS ---
     addCost: function(entry) {
         entry.id = Date.now();
         this.data.costs.unshift(entry);
         this.save();
     },
 
-    deleteLog: function(id) {
-        this.data.logs = this.data.logs.filter(l => l.id !== id);
-        this.save();
-    },
-    
     deleteCost: function(id) {
-        this.data.costs = this.data.costs.filter(c => c.id !== id);
+        this.data.costs = this.data.costs.filter(item => item.id !== id);
         this.save();
     }
 };
