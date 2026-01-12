@@ -14,14 +14,13 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0; 
     padding: 15px; 
-    padding-bottom: 80px; /* Място за скрол */
+    padding-bottom: 80px; 
 }
 
-/* ЗАГЛАВИЕ */
+/* HEADER & NAV */
 header h1 { margin: 0; font-size: 1.8rem; }
 header h2 { margin: 5px 0 20px 0; font-size: 0.9rem; color: var(--text-muted); font-weight: normal; }
 
-/* НАВИГАЦИЯ (БУТОНИ) */
 nav {
     display: flex; 
     gap: 8px; 
@@ -50,22 +49,16 @@ nav {
     font-weight: bold;
 }
 
-/* ТАБОВЕ - ЛОГИКА ЗА СКРИВАНЕ */
-.tab {
-    display: none; /* Скрий всичко по подразбиране */
-    animation: fadeIn 0.3s ease;
-}
-
-.tab.active {
-    display: block; /* Покажи само активния */
-}
+/* TAB LOGIC */
+.tab { display: none; animation: fadeIn 0.3s ease; }
+.tab.active { display: block; }
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* ПОЛЕТА И ФОРМИ */
+/* FORMS */
 .section-block { margin-bottom: 15px; }
 
 label { 
@@ -86,10 +79,9 @@ input, select {
     box-sizing: border-box;
     outline: none;
 }
-
 input:focus, select:focus { border-color: var(--primary-color); }
 
-/* БУТОНИ ЗА ДЕЙСТВИЕ */
+/* BUTTONS */
 button {
     display: inline-block; 
     padding: 12px 20px; 
@@ -102,37 +94,29 @@ button {
     width: 100%;
     margin-top: 10px;
 }
-
 #addEntry, #c_add { background-color: var(--primary-color); color: #000; }
 #sameAsLast, #saveCompareSettings { background-color: #333; color: #fff; }
-button.danger { background-color: #d32f2f; color: white; }
 
-/* ДЕТАЙЛИ И ТАБЛИЦИ */
-details {
-    margin-top: 20px;
-    background: #0a0a0a;
-    border: 1px solid #222;
-    border-radius: 10px;
-    padding: 10px;
+/* LIST STYLES (LOG & COSTS) */
+.log-entry {
+    background-color: #1a1a1a;
+    margin-bottom: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
+
+.log-info { flex-grow: 1; }
+.log-main { font-size: 1.1em; font-weight: bold; color: #fff; margin-bottom: 2px; }
+.log-sub { font-size: 0.85em; color: #888; }
+
+.log-actions { display: flex; gap: 15px; margin-left: 10px; }
+.btn-icon { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0; margin: 0; width: auto; }
+.edit { color: #ffca28; }
+.delete { color: #e53935; }
+
+details { margin-top: 20px; background: #0a0a0a; border: 1px solid #222; border-radius: 10px; padding: 10px; }
 summary { cursor: pointer; color: #888; font-weight: 500; outline: none; }
-
-/* COMPARE BOX */
-.compare-box {
-    background: #111;
-    border: 1px solid #333;
-    padding: 15px;
-    border-radius: 10px;
-    text-align: center;
-    margin-bottom: 20px;
-}
-/* Разкрасяване на списъка с история */
-#logTable > div, #costTable > div {
-    background-color: #1a1a1a; /* Леко по-светъл фон от черното */
-    margin-bottom: 8px;        /* Разстояние между редовете */
-    padding: 12px;             /* Въздух вътре в кутийката */
-    border-radius: 8px;        /* Заоблени ъгли */
-    border-bottom: none !important; /* Махаме старата черта */
-    border-left: 3px solid #00b341; /* Зелена черта отляво за акцент */
-}
-
