@@ -1,4 +1,6 @@
-/* app-actions.js - FINAL VERSION */
+/* app-actions.js - Event Listeners & Logic */
+
+let editModeId = null; 
 
 const AppActions = {
     init: function() {
@@ -6,15 +8,11 @@ const AppActions = {
         this.bindLog();
         this.bindCosts();
         this.bindSettings();
-        this.bindCompare(); // <--- НОВО: Зареждаме логиката за сравнение
+        this.bindCompare();
         
-        // Render history
-        if(typeof UILog !== 'undefined') {
-            UILog.renderList(App.data.logs);
-        }
+        if(typeof UILog !== 'undefined') UILog.renderList(App.data.logs);
         this.renderCostsList();
 
-        // Default dates
         const today = new Date().toISOString().split('T')[0];
         if(document.getElementById('date')) document.getElementById('date').value = today;
         if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
@@ -31,8 +29,7 @@ const AppActions = {
                 
                 btn.classList.add('active');
                 const targetId = btn.getAttribute('data-tab');
-                const targetSection = document.getElementById(targetId);
-                if (targetSection) targetSection.classList.add('active');
+                document.getElementById(targetId).classList.add('active');
             });
         });
     },
@@ -48,28 +45,35 @@ const AppActions = {
                 const note = document.getElementById('note').value;
 
                 if (!date || isNaN(kwh) || isNaN(price)) {
-                    alert('Please fill Date, kWh and Price.');
+                    alert('Моля попълнете Дата, kWh и Цена.');
                     return;
                 }
 
-                App.addLog({ date, kwh, price, type, note, total: kwh * price });
+                if (editModeId) {
+                    // UPDATE
+                    const index = App.data.logs.findIndex(l => l.id === editModeId);
+                    if (index !== -1) {
+                        App.data.logs[index] = { id: editModeId, date, kwh, price, type, note, total: kwh * price };
+                        App.save();
+                    }
+                    editModeId = null;
+                    btnAdd.innerText = "Add Entry";
+                    btnAdd.style.backgroundColor = ""; 
+                } else {
+                    // ADD
+                    App.addLog({ date, kwh, price, type, note, total: kwh * price });
+                }
+
                 UILog.renderList(App.data.logs);
-                
-                // Clear fields & hide preview
-                document.getElementById('kwh').value = '';
-                document.getElementById('note').value = '';
-                document.getElementById('log-preview').style.display = 'none';
+                this.clearLogForm();
             });
         }
 
-        // Live Preview Logic
-        const inputs = ['kwh', 'price'];
-        inputs.forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.addEventListener('input', () => this.updatePreview());
+        // Live Preview Events
+        ['kwh', 'price'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => this.updatePreview());
         });
         
-        // Update price when dropdown changes
         document.getElementById('type').addEventListener('change', (e) => {
              const opt = e.target.options[e.target.selectedIndex];
              if(opt.dataset.price) {
@@ -78,17 +82,15 @@ const AppActions = {
              }
         });
 
-        const btnSame = document.getElementById('sameAsLast');
-        if(btnSame) {
-            btnSame.addEventListener('click', () => {
-                if(App.data.logs.length > 0) {
-                    const last = App.data.logs[0];
-                    document.getElementById('price').value = last.price;
-                    document.getElementById('type').value = last.type;
-                    document.getElementById('note').value = last.note;
-                }
-            });
-        }
+        document.getElementById('sameAsLast').addEventListener('click', () => {
+            if(App.data.logs.length > 0) {
+                const last = App.data.logs[0];
+                document.getElementById('price').value = last.price;
+                document.getElementById('type').value = last.type;
+                document.getElementById('note').value = last.note;
+                this.updatePreview();
+            }
+        });
     },
 
     updatePreview: function() {
@@ -97,8 +99,7 @@ const AppActions = {
         
         if(typeof Calc !== 'undefined') {
             const res = Calc.compare(
-                kwh, 
-                price, 
+                kwh, price, 
                 parseFloat(App.settings.evEff), 
                 parseFloat(App.settings.iceMpg), 
                 parseFloat(App.settings.fuelPrice)
@@ -106,27 +107,56 @@ const AppActions = {
             UILog.renderPreview(res);
         }
     },
+
+    editLogEntry: function(id) {
+        const entry = App.data.logs.find(l => l.id === id);
+        if(!entry) return;
+        
+        document.getElementById('date').value = entry.date;
+        document.getElementById('kwh').value = entry.kwh;
+        document.getElementById('price').value = entry.price;
+        document.getElementById('type').value = entry.type;
+        document.getElementById('note').value = entry.note;
+
+        document.getElementById('log').scrollIntoView({behavior: 'smooth'});
+
+        editModeId = id;
+        const btn = document.getElementById('addEntry');
+        btn.innerText = "Update Entry";
+        btn.style.backgroundColor = "#ff9800";
+        
+        this.updatePreview();
+    },
     
     deleteLogEntry: function(id) {
         if(confirm('Delete log?')) {
             App.deleteLog(id);
             UILog.renderList(App.data.logs);
+            if(editModeId === id) this.clearLogForm();
         }
     },
 
+    clearLogForm: function() {
+        document.getElementById('kwh').value = '';
+        document.getElementById('note').value = '';
+        document.getElementById('log-preview').style.display = 'none';
+        editModeId = null;
+        const btn = document.getElementById('addEntry');
+        btn.innerText = "Add Entry";
+        btn.style.backgroundColor = ""; 
+    },
+
     bindCosts: function() {
-        const btnAddCost = document.getElementById('c_add');
-        if(btnAddCost) {
-            btnAddCost.addEventListener('click', () => {
+        const btn = document.getElementById('c_add');
+        if(btn) {
+            btn.addEventListener('click', () => {
                 const date = document.getElementById('c_date').value;
                 const amount = parseFloat(document.getElementById('c_amount').value);
                 const cat = document.getElementById('c_category').value;
                 const note = document.getElementById('c_note').value;
-
-                if(!amount || !date) return alert('Enter amount and date');
+                if(!amount || !date) return alert('Enter amount');
                 App.addCost({ date, amount, cat, note });
                 this.renderCostsList();
-                
                 document.getElementById('c_amount').value = '';
                 document.getElementById('c_note').value = '';
             });
@@ -137,23 +167,22 @@ const AppActions = {
         const div = document.getElementById('costTable');
         if(!div) return;
         let html = '';
-        if(App.data.costs.length === 0) {
-            div.innerHTML = '<p style="color:#666; font-size:0.9rem;">Няма записани разходи.</p>';
-            return;
+        if(App.data.costs.length === 0) div.innerHTML = '<p style="color:#666;">Няма разходи.</p>';
+        else {
+            App.data.costs.forEach(c => {
+                html += `<div class="log-entry">
+                    <div class="log-info">
+                        <span style="color:#fff;">${c.date} • <strong>${c.cat}</strong></span><br>
+                        <small style="color:#888;">${c.note}</small>
+                    </div>
+                    <div>
+                        <span style="color:#fff; font-weight:bold; margin-right:10px;">£${c.amount.toFixed(2)}</span>
+                        <button onclick="AppActions.deleteCostEntry(${c.id})" class="btn-icon delete">✖</button>
+                    </div>
+                </div>`;
+            });
+            div.innerHTML = html;
         }
-        App.data.costs.forEach(c => {
-            html += `<div style="border-bottom:1px solid #333; padding:10px 0; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="color:#fff;">${c.date} • <strong>${c.cat}</strong></span><br>
-                    <small style="color:#888;">${c.note}</small>
-                </div>
-                <div>
-                    <span style="color:#fff; font-weight:bold; margin-right:10px;">£${c.amount.toFixed(2)}</span>
-                    <button onclick="AppActions.deleteCostEntry(${c.id})" style="color:#d32f2f; border:none; background:none; font-size:1.2rem;">&times;</button>
-                </div>
-            </div>`;
-        });
-        div.innerHTML = html;
     },
     
     deleteCostEntry: function(id) {
@@ -163,38 +192,27 @@ const AppActions = {
         }
     },
 
-    // --- НОВО: Логика за Compare таба ---
     bindCompare: function() {
-        const btnCalc = document.getElementById('btn-calc-trip');
-        if (btnCalc) {
-            btnCalc.addEventListener('click', () => {
+        const btn = document.getElementById('btn-calc-trip');
+        if(btn) {
+            btn.addEventListener('click', () => {
                 const dist = parseFloat(document.getElementById('cmp-dist').value);
-                if (!dist) { alert('Въведи мили'); return; }
-
-                // Взимаме настройките
+                if(!dist) return;
+                
                 const evEff = parseFloat(App.settings.evEff);
                 const iceMpg = parseFloat(App.settings.iceMpg);
                 const fuelPrice = parseFloat(App.settings.fuelPrice);
-                
-                // Взимаме текущата цена на тока от Log таба (или 0.56 по подразбиране)
                 const evPrice = parseFloat(document.getElementById('price').value) || 0.56;
 
-                // Сметки
-                const kwhNeeded = dist / evEff;
-                const costEV = kwhNeeded * evPrice;
-                
-                const gallons = dist / iceMpg;
-                const liters = gallons * 4.54609;
-                const costICE = liters * fuelPrice;
-                
+                const costEV = (dist / evEff) * evPrice;
+                const costICE = (dist / iceMpg) * 4.54609 * fuelPrice;
                 const diff = costICE - costEV;
                 const isCheaper = diff > 0;
 
-                // Показване
                 const resDiv = document.getElementById('compare-result');
                 resDiv.innerHTML = `
                     <div style="background:#222; border-left: 4px solid ${isCheaper ? '#4CAF50' : '#f44336'}; padding:15px; margin-top:20px; border-radius:4px;">
-                        <h4 style="margin:0 0 10px 0; color:#fff;">Резултат за ${dist} мили</h4>
+                        <h4 style="margin:0 0 10px 0; color:#fff;">За ${dist} мили</h4>
                         <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:#ccc;">
                             <span>🔋 EV: <strong>£${costEV.toFixed(2)}</strong></span>
                             <span>⛽ ICE: <strong>£${costICE.toFixed(2)}</strong></span>
@@ -202,8 +220,7 @@ const AppActions = {
                         <div style="font-size:1.1em; font-weight:bold; color:${isCheaper ? '#4CAF50' : '#f44336'}">
                             ${isCheaper ? 'Спестяваш' : 'По-скъпо с'} £${Math.abs(diff).toFixed(2)}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
         }
     },
@@ -220,7 +237,7 @@ const AppActions = {
                 App.settings.iceMpg = parseFloat(document.getElementById('set_ice_mpg').value);
                 App.settings.fuelPrice = parseFloat(document.getElementById('set_fuel_price').value);
                 App.save();
-                alert('Настройките са запазени!');
+                alert('Saved!');
             });
         }
         
