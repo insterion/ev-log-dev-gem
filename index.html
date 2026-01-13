@@ -74,11 +74,11 @@
     </div>
 
     <div class="section-block">
-      <label>Category</label>
+      <label>Категория</label>
       <select id="c_category">
-        <option value="Tyres">Tyres</option>
-        <option value="Service">Service</option>
-        <option value="Insurance">Insurance</option>
+        <option value="Tyres">Tyres (Гуми)</option>
+        <option value="Service">Service (Обслужване)</option>
+        <option value="Insurance">Insurance (Застраховка)</option>
         <option value="Tax">Tax/MOT</option>
         <option value="Accessories">Accessories</option>
         <option value="Other">Other</option>
@@ -101,8 +101,37 @@
   </section>
 
   <section id="compare" class="tab">
-    <h3>Калкулатор за пътуване</h3>
-    <p style="color:#aaa; font-size:0.9em;">Бърза симулация за конкретно пътуване (на база настройките).</p>
+    
+    <div id="tco-dashboard" style="display:none; margin-bottom:25px;">
+        <h3 style="margin-top:0;">📊 Пълна статистика</h3>
+        
+        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;">
+            </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
+                <div style="font-size:0.8rem; color:#888;">Пробег (est)</div>
+                <div id="stat-miles" style="font-size:1.1rem; font-weight:bold;">0 mi</div>
+            </div>
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
+                <div style="font-size:0.8rem; color:#888;">EV Зареждане</div>
+                <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold; color:#ff9800;">£0</div>
+            </div>
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
+                <div style="font-size:0.8rem; color:#888;">EV Поддръжка</div>
+                <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold; color:#f44336;">£0</div>
+            </div>
+             <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
+                <div style="font-size:0.8rem; color:#888;">ДВГ Гориво (est)</div>
+                <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold; color:#2196F3;">£0</div>
+            </div>
+        </div>
+    </div>
+
+    <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
+
+    <h3>🧮 Калкулатор за пътуване</h3>
+    <p style="color:#aaa; font-size:0.9em;">Симулация за конкретно пътуване (на база настройките).</p>
     
     <div class="compare-box" style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; text-align:center;">
         <label>Разстояние (мили)</label>
