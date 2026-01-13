@@ -1,6 +1,7 @@
-/* app-actions.js */
+/* app-actions.js - Event Listeners & Logic */
 
-let editModeId = null; 
+let editModeId = null;       // За LOG (Зареждане)
+let editCostModeId = null;   // НОВО: За COSTS (Разходи)
 
 const AppActions = {
     init: function() {
@@ -10,9 +11,11 @@ const AppActions = {
         this.bindSettings();
         this.bindCompare();
         
+        // Рендериране на списъците при старт
         if(typeof UILog !== 'undefined') UILog.renderList(App.data.logs);
         this.renderCostsList();
 
+        // Слагаме днешна дата по подразбиране
         const today = new Date().toISOString().split('T')[0];
         if(document.getElementById('date')) document.getElementById('date').value = today;
         if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
@@ -31,7 +34,7 @@ const AppActions = {
                 const targetId = btn.getAttribute('data-tab');
                 document.getElementById(targetId).classList.add('active');
 
-                // НОВО: Ако отваряме Compare, обновяваме статистиката
+                // Обновяваме статистиката само ако сме в Compare таба
                 if(targetId === 'compare') {
                     this.updateStats();
                 }
@@ -39,45 +42,7 @@ const AppActions = {
         });
     },
 
-    // --- LOGIC FOR STATS (TCO) ---
-    updateStats: function() {
-        const dashboard = document.getElementById('tco-dashboard');
-        
-        // Ако няма данни, крием таблото
-        if (App.data.logs.length === 0) {
-            dashboard.style.display = 'none';
-            return;
-        }
-        dashboard.style.display = 'block';
-
-        // Викаме калкулатора
-        const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
-
-        // Пълним полетата
-        document.getElementById('stat-miles').innerText = stats.totalMiles.toFixed(0) + ' mi';
-        document.getElementById('stat-ev-charge').innerText = '£' + stats.totalEvChargingCost.toFixed(2);
-        document.getElementById('stat-ev-maint').innerText = '£' + stats.totalMaintenance.toFixed(2);
-        document.getElementById('stat-ice-fuel').innerText = '£' + stats.totalIceFuelCost.toFixed(2);
-
-        // Основната карта (Net Balance)
-        const card = document.getElementById('tco-card');
-        const isPositive = stats.netBalance >= 0;
-        const color = isPositive ? '#4CAF50' : '#f44336';
-        
-        card.style.border = `2px solid ${color}`;
-        card.innerHTML = `
-            <div style="font-size:0.9rem; color:#ccc;">Нетен резултат (Fuel Savings - EV Maint)</div>
-            <div style="font-size:1.8rem; font-weight:bold; color:${color}; margin:10px 0;">
-                ${isPositive ? '+' : ''}£${stats.netBalance.toFixed(2)}
-            </div>
-            <div style="font-size:0.8rem; color:#888;">
-                Спестеното от гориво (${stats.fuelSavings.toFixed(0)}) 
-                ${isPositive ? 'покрива' : 'НЕ покрива'} поддръжката (${stats.totalMaintenance.toFixed(0)})
-            </div>
-        `;
-    },
-
-    // --- OLD LOGIC BELOW (Log, Costs, Settings...) ---
+    // ================= LOG (ЗАРЕЖДАНЕ) LOGIC =================
 
     bindLog: function() {
         const btnAdd = document.getElementById('addEntry');
@@ -95,6 +60,7 @@ const AppActions = {
                 }
 
                 if (editModeId) {
+                    // UPDATE LOGIC
                     const index = App.data.logs.findIndex(l => l.id === editModeId);
                     if (index !== -1) {
                         App.data.logs[index] = { id: editModeId, date, kwh, price, type, note, total: kwh * price };
@@ -104,6 +70,7 @@ const AppActions = {
                     btnAdd.innerText = "Add Entry";
                     btnAdd.style.backgroundColor = ""; 
                 } else {
+                    // ADD LOGIC
                     App.addLog({ date, kwh, price, type, note, total: kwh * price });
                 }
 
@@ -187,6 +154,8 @@ const AppActions = {
         btn.style.backgroundColor = ""; 
     },
 
+    // ================= COSTS (РАЗХОДИ) LOGIC =================
+
     bindCosts: function() {
         const btn = document.getElementById('c_add');
         if(btn) {
@@ -195,11 +164,26 @@ const AppActions = {
                 const amount = parseFloat(document.getElementById('c_amount').value);
                 const cat = document.getElementById('c_category').value;
                 const note = document.getElementById('c_note').value;
-                if(!amount || !date) return alert('Enter amount');
-                App.addCost({ date, amount, cat, note });
+                
+                if(!amount || !date) return alert('Enter amount and date');
+
+                if (editCostModeId) {
+                    // UPDATE COST
+                    const index = App.data.costs.findIndex(c => c.id === editCostModeId);
+                    if (index !== -1) {
+                        App.data.costs[index] = { id: editCostModeId, date, amount, cat, note };
+                        App.save();
+                    }
+                    editCostModeId = null;
+                    btn.innerText = "Add Cost";
+                    btn.style.backgroundColor = "";
+                } else {
+                    // ADD COST
+                    App.addCost({ date, amount, cat, note });
+                }
+
                 this.renderCostsList();
-                document.getElementById('c_amount').value = '';
-                document.getElementById('c_note').value = '';
+                this.clearCostForm();
             });
         }
     },
@@ -218,6 +202,9 @@ const AppActions = {
                     </div>
                     <div>
                         <span style="color:#fff; font-weight:bold; margin-right:10px;">£${c.amount.toFixed(2)}</span>
+                    </div>
+                    <div class="log-actions">
+                        <button onclick="AppActions.editCostEntry(${c.id})" class="btn-icon edit">✎</button>
                         <button onclick="AppActions.deleteCostEntry(${c.id})" class="btn-icon delete">✖</button>
                     </div>
                 </div>`;
@@ -225,12 +212,75 @@ const AppActions = {
             div.innerHTML = html;
         }
     },
-    
+
+    // НОВО: Функция за зареждане на данните за редакция
+    editCostEntry: function(id) {
+        const entry = App.data.costs.find(c => c.id === id);
+        if(!entry) return;
+
+        document.getElementById('c_date').value = entry.date;
+        document.getElementById('c_amount').value = entry.amount;
+        document.getElementById('c_category').value = entry.cat;
+        document.getElementById('c_note').value = entry.note;
+
+        document.getElementById('costs').scrollIntoView({behavior: 'smooth'});
+
+        editCostModeId = id;
+        const btn = document.getElementById('c_add');
+        btn.innerText = "Update Cost";
+        btn.style.backgroundColor = "#ff9800";
+    },
+
     deleteCostEntry: function(id) {
         if(confirm('Delete cost?')) {
             App.deleteCost(id);
             this.renderCostsList();
+            if(editCostModeId === id) this.clearCostForm();
         }
+    },
+
+    clearCostForm: function() {
+        document.getElementById('c_amount').value = '';
+        document.getElementById('c_note').value = '';
+        editCostModeId = null;
+        const btn = document.getElementById('c_add');
+        btn.innerText = "Add Cost";
+        btn.style.backgroundColor = "";
+    },
+
+    // ================= COMPARE & STATS LOGIC =================
+
+    updateStats: function() {
+        const dashboard = document.getElementById('tco-dashboard');
+        
+        if (App.data.logs.length === 0) {
+            dashboard.style.display = 'none';
+            return;
+        }
+        dashboard.style.display = 'block';
+
+        const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
+
+        document.getElementById('stat-miles').innerText = stats.totalMiles.toFixed(0) + ' mi';
+        document.getElementById('stat-ev-charge').innerText = '£' + stats.totalEvChargingCost.toFixed(2);
+        document.getElementById('stat-ev-maint').innerText = '£' + stats.totalMaintenance.toFixed(2);
+        document.getElementById('stat-ice-fuel').innerText = '£' + stats.totalIceFuelCost.toFixed(2);
+
+        const card = document.getElementById('tco-card');
+        const isPositive = stats.netBalance >= 0;
+        const color = isPositive ? '#4CAF50' : '#f44336';
+        
+        card.style.border = `2px solid ${color}`;
+        card.innerHTML = `
+            <div style="font-size:0.9rem; color:#ccc;">Нетен резултат (Fuel Savings - EV Maint)</div>
+            <div style="font-size:1.8rem; font-weight:bold; color:${color}; margin:10px 0;">
+                ${isPositive ? '+' : ''}£${stats.netBalance.toFixed(2)}
+            </div>
+            <div style="font-size:0.8rem; color:#888;">
+                Спестеното от гориво (${stats.fuelSavings.toFixed(0)}) 
+                ${isPositive ? 'покрива' : 'НЕ покрива'} поддръжката (${stats.totalMaintenance.toFixed(0)})
+            </div>
+        `;
     },
 
     bindCompare: function() {
