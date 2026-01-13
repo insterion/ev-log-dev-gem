@@ -1,4 +1,4 @@
-/* app-actions.js - Event Listeners & Logic */
+/* app-actions.js */
 
 let editModeId = null; 
 
@@ -30,9 +30,54 @@ const AppActions = {
                 btn.classList.add('active');
                 const targetId = btn.getAttribute('data-tab');
                 document.getElementById(targetId).classList.add('active');
+
+                // НОВО: Ако отваряме Compare, обновяваме статистиката
+                if(targetId === 'compare') {
+                    this.updateStats();
+                }
             });
         });
     },
+
+    // --- LOGIC FOR STATS (TCO) ---
+    updateStats: function() {
+        const dashboard = document.getElementById('tco-dashboard');
+        
+        // Ако няма данни, крием таблото
+        if (App.data.logs.length === 0) {
+            dashboard.style.display = 'none';
+            return;
+        }
+        dashboard.style.display = 'block';
+
+        // Викаме калкулатора
+        const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
+
+        // Пълним полетата
+        document.getElementById('stat-miles').innerText = stats.totalMiles.toFixed(0) + ' mi';
+        document.getElementById('stat-ev-charge').innerText = '£' + stats.totalEvChargingCost.toFixed(2);
+        document.getElementById('stat-ev-maint').innerText = '£' + stats.totalMaintenance.toFixed(2);
+        document.getElementById('stat-ice-fuel').innerText = '£' + stats.totalIceFuelCost.toFixed(2);
+
+        // Основната карта (Net Balance)
+        const card = document.getElementById('tco-card');
+        const isPositive = stats.netBalance >= 0;
+        const color = isPositive ? '#4CAF50' : '#f44336';
+        
+        card.style.border = `2px solid ${color}`;
+        card.innerHTML = `
+            <div style="font-size:0.9rem; color:#ccc;">Нетен резултат (Fuel Savings - EV Maint)</div>
+            <div style="font-size:1.8rem; font-weight:bold; color:${color}; margin:10px 0;">
+                ${isPositive ? '+' : ''}£${stats.netBalance.toFixed(2)}
+            </div>
+            <div style="font-size:0.8rem; color:#888;">
+                Спестеното от гориво (${stats.fuelSavings.toFixed(0)}) 
+                ${isPositive ? 'покрива' : 'НЕ покрива'} поддръжката (${stats.totalMaintenance.toFixed(0)})
+            </div>
+        `;
+    },
+
+    // --- OLD LOGIC BELOW (Log, Costs, Settings...) ---
 
     bindLog: function() {
         const btnAdd = document.getElementById('addEntry');
@@ -50,7 +95,6 @@ const AppActions = {
                 }
 
                 if (editModeId) {
-                    // UPDATE
                     const index = App.data.logs.findIndex(l => l.id === editModeId);
                     if (index !== -1) {
                         App.data.logs[index] = { id: editModeId, date, kwh, price, type, note, total: kwh * price };
@@ -60,7 +104,6 @@ const AppActions = {
                     btnAdd.innerText = "Add Entry";
                     btnAdd.style.backgroundColor = ""; 
                 } else {
-                    // ADD
                     App.addLog({ date, kwh, price, type, note, total: kwh * price });
                 }
 
@@ -69,7 +112,6 @@ const AppActions = {
             });
         }
 
-        // Live Preview Events
         ['kwh', 'price'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => this.updatePreview());
         });
@@ -124,7 +166,6 @@ const AppActions = {
         const btn = document.getElementById('addEntry');
         btn.innerText = "Update Entry";
         btn.style.backgroundColor = "#ff9800";
-        
         this.updatePreview();
     },
     
