@@ -73,9 +73,8 @@
       <label>Отнася се за:</label>
       <select id="c_target" style="border: 1px solid #555; background:#222;">
         <option value="ev">🚗 Моята Кола (EV)</option>
-        <option value="ice">⛽ ДВГ Алтернатива (Симулация)</option>
+        <option value="ice">⛽ ДВГ Алтернатива</option>
       </select>
-      <small style="color:#666; display:block; margin-top:5px;">Избери "ДВГ", ако въвеждаш виртуални разходи (напр. Масло), които би платил за старата кола.</small>
     </div>
 
     <div class="section-block">
@@ -115,10 +114,9 @@
     <div id="tco-dashboard" style="display:none; margin-bottom:25px;">
         <h3 style="margin-top:0;">📊 Пълна статистика</h3>
         
-        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;">
-            </div>
+        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;"></div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
                 <div style="font-size:0.8rem; color:#888;">⚡ EV Зареждане</div>
                 <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold;">£0</div>
@@ -127,7 +125,6 @@
                 <div style="font-size:0.8rem; color:#888;">🚗 EV Поддръжка</div>
                 <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
-            
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #f44336;">
                 <div style="font-size:0.8rem; color:#888;">⛽ ДВГ Гориво (est)</div>
                 <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold;">£0</div>
@@ -137,8 +134,10 @@
                 <div id="stat-ice-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
         </div>
-        <div style="text-align:center; margin-top:10px; font-size:0.8rem; color:#666;">
-            Пробег: <span id="stat-miles">0</span> mi
+
+        <div style="background:#1a1a1a; padding:15px; border-radius:10px;">
+            <h4 style="margin:0 0 15px 0; color:#ccc; font-size:1rem;">📈 Кумулативни разходи с времето</h4>
+            <canvas id="tcoChart" width="400" height="250"></canvas>
         </div>
     </div>
 
@@ -157,39 +156,22 @@
   </section>
 
   <section id="settings" class="tab">
-    
     <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
         <h3 style="margin-top:0;">🏎️ EV vs ICE Настройки</h3>
-        <p style="font-size:0.8rem; color:#888;">Използват се за калкулациите.</p>
-
-        <div class="section-block">
-          <label>EV Ефективност (mi/kWh)</label>
-          <input type="number" id="set_ev_eff" placeholder="3.0" step="0.1">
-        </div>
-
-        <div class="section-block">
-          <label>ICE Разход (MPG)</label>
-          <input type="number" id="set_ice_mpg" placeholder="44" step="1">
-        </div>
-
-        <div class="section-block">
-          <label>Цена Гориво (£/Liter)</label>
-          <input type="number" id="set_fuel_price" placeholder="1.45" step="0.01">
-        </div>
-
+        <div class="section-block"><label>EV Ефективност (mi/kWh)</label><input type="number" id="set_ev_eff" placeholder="3.0" step="0.1"></div>
+        <div class="section-block"><label>ICE Разход (MPG)</label><input type="number" id="set_ice_mpg" placeholder="44" step="1"></div>
+        <div class="section-block"><label>Цена Гориво (£/Liter)</label><input type="number" id="set_fuel_price" placeholder="1.45" step="0.01"></div>
         <button id="saveCompareSettings">Save Settings</button>
     </div>
-
     <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333;">
         <h3 style="margin-top:0;">💾 Backup Data</h3>
         <button id="exportBackup" style="background:#333;">⬇️ Export JSON</button>
-        <div style="margin-top:15px;">
-            <label>Import JSON</label>
-            <input type="file" id="importBackup" />
-        </div>
+        <div style="margin-top:15px;"><label>Import JSON</label><input type="file" id="importBackup" /></div>
     </div>
   </section>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <script src="calc.js"></script>
   <script src="ui-log.js"></script>
   <script src="app-core.js"></script>
