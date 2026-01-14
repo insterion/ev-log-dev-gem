@@ -68,6 +68,16 @@
 
   <section id="costs" class="tab">
     <h3>Добави разход</h3>
+    
+    <div class="section-block">
+      <label>Отнася се за:</label>
+      <select id="c_target" style="border: 1px solid #555; background:#222;">
+        <option value="ev">🚗 Моята Кола (EV)</option>
+        <option value="ice">⛽ ДВГ Алтернатива (Симулация)</option>
+      </select>
+      <small style="color:#666; display:block; margin-top:5px;">Избери "ДВГ", ако въвеждаш виртуални разходи (напр. Масло), които би платил за старата кола.</small>
+    </div>
+
     <div class="section-block">
       <label>Дата</label>
       <input type="date" id="c_date" />
@@ -109,29 +119,33 @@
             </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
-                <div style="font-size:0.8rem; color:#888;">Пробег (est)</div>
-                <div id="stat-miles" style="font-size:1.1rem; font-weight:bold;">0 mi</div>
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
+                <div style="font-size:0.8rem; color:#888;">⚡ EV Зареждане</div>
+                <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
-            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
-                <div style="font-size:0.8rem; color:#888;">EV Зареждане</div>
-                <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold; color:#ff9800;">£0</div>
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
+                <div style="font-size:0.8rem; color:#888;">🚗 EV Поддръжка</div>
+                <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
-            <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
-                <div style="font-size:0.8rem; color:#888;">EV Поддръжка</div>
-                <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold; color:#f44336;">£0</div>
+            
+            <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #f44336;">
+                <div style="font-size:0.8rem; color:#888;">⛽ ДВГ Гориво (est)</div>
+                <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
-             <div style="background:#1a1a1a; padding:10px; border-radius:8px;">
-                <div style="font-size:0.8rem; color:#888;">ДВГ Гориво (est)</div>
-                <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold; color:#2196F3;">£0</div>
+             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #f44336;">
+                <div style="font-size:0.8rem; color:#888;">🔧 ДВГ Поддръжка</div>
+                <div id="stat-ice-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
             </div>
+        </div>
+        <div style="text-align:center; margin-top:10px; font-size:0.8rem; color:#666;">
+            Пробег: <span id="stat-miles">0</span> mi
         </div>
     </div>
 
     <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
 
     <h3>🧮 Калкулатор за пътуване</h3>
-    <p style="color:#aaa; font-size:0.9em;">Симулация за конкретно пътуване (на база настройките).</p>
+    <p style="color:#aaa; font-size:0.9em;">Симулация за единично пътуване.</p>
     
     <div class="compare-box" style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; text-align:center;">
         <label>Разстояние (мили)</label>
@@ -146,7 +160,7 @@
     
     <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
         <h3 style="margin-top:0;">🏎️ EV vs ICE Настройки</h3>
-        <p style="font-size:0.8rem; color:#888;">Използват се за автоматичните сравнения.</p>
+        <p style="font-size:0.8rem; color:#888;">Използват се за калкулациите.</p>
 
         <div class="section-block">
           <label>EV Ефективност (mi/kWh)</label>
