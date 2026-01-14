@@ -1,4 +1,4 @@
-/* calc.js - Updated Logic */
+/* calc.js - Calculation Logic */
 
 const Calc = {
     // Единично сравнение (за калкулатора)
@@ -17,49 +17,55 @@ const Calc = {
         };
     },
 
-    // НОВО: Глобална статистика (TCO)
+    // НОВО: TCO с поддръжка за двата типа
     calculateTCO: function(logs, costs, settings) {
         let totalKwh = 0;
         let totalEvChargingCost = 0;
         
-        // 1. Сумираме зарежданията
+        // 1. Ток (EV Fuel)
         logs.forEach(l => {
             totalKwh += parseFloat(l.kwh);
-            // Ако има записано total, ползваме го, иначе смятаме
             let cost = (l.total !== undefined) ? l.total : (l.kwh * l.price);
             totalEvChargingCost += parseFloat(cost);
         });
 
-        // 2. Сумираме допълнителните разходи (Costs)
-        let totalMaintenance = 0;
+        // 2. Разделяне на разходите (EV vs ICE)
+        let totalEvMaint = 0;
+        let totalIceMaint = 0;
+
         costs.forEach(c => {
-            totalMaintenance += parseFloat(c.amount);
+            // Ако няма дефиниран target (стари записи), приемаме че е EV
+            const target = c.target || 'ev';
+            const amt = parseFloat(c.amount);
+
+            if(target === 'ev') {
+                totalEvMaint += amt;
+            } else {
+                totalIceMaint += amt;
+            }
         });
 
-        // 3. Изчисляваме еквивалента на ДВГ
+        // 3. ДВГ Гориво (ICE Fuel Simulation)
         const totalMiles = totalKwh * settings.evEff;
-        
         const gallons = totalMiles / settings.iceMpg;
         const liters = gallons * 4.54609;
         const totalIceFuelCost = liters * settings.fuelPrice;
 
-        // 4. Големите тотали
-        const totalSpentEV = totalEvChargingCost + totalMaintenance;
+        // 4. КРАЙНИ СУМИ
+        const totalSpentEV = totalEvChargingCost + totalEvMaint;
+        const totalSpentICE = totalIceFuelCost + totalIceMaint;
         
-        // Спестено само от гориво (Ток vs Бензин)
-        const fuelSavings = totalIceFuelCost - totalEvChargingCost;
-
-        // "Нетен баланс" - Спестеното от гориво покрива ли поддръжката?
-        const netBalance = fuelSavings - totalMaintenance;
+        // Нетен баланс (Колко си спестил общо)
+        const netBalance = totalSpentICE - totalSpentEV;
 
         return {
             totalMiles,
-            totalKwh,
             totalEvChargingCost,
-            totalMaintenance,
-            totalSpentEV,
+            totalEvMaint,
             totalIceFuelCost,
-            fuelSavings,
+            totalIceMaint,
+            totalSpentEV,
+            totalSpentICE,
             netBalance
         };
     }
