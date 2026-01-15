@@ -1,858 +1,575 @@
-// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance + Costs filter + Insurance breakdown)
+/* =========================================
+   APP.JS - Combined Application Logic
+   Contains: Calc, App (Core), UILog, AppActions
+   ========================================= */
 
-(function () {
-  const D = window.EVData;
-  const C = window.EVCalc;
-  const U = window.EVUI;
+// --- 1. CALCULATOR LOGIC ---
+const Calc = {
+    compare: function(kwh, pricePerKwh, evEfficiency, iceMpg, fuelPricePerLiter) {
+        const rangeMiles = kwh * evEfficiency;
+        const costEV = kwh * pricePerKwh;
+        const gallons = rangeMiles / iceMpg;
+        const liters = gallons * 4.54609;
+        const costICE = liters * fuelPricePerLiter;
+        return { 
+            rangeMiles, costEV, costICE, 
+            savings: costICE - costEV, 
+            isCheaper: costEV < costICE 
+        };
+    },
+    calculateTCO: function(logs, costs, settings) {
+        let totalKwh = 0; 
+        let totalEvChargingCost = 0;
+        
+        // Sum EV Charging
+        logs.forEach(l => {
+            totalKwh += parseFloat(l.kwh) || 0;
+            // Handle both new 'total' field and calculate if missing
+            let cost = (l.total !== undefined) ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price));
+            if(isNaN(cost)) cost = 0;
+            totalEvChargingCost += cost;
+        });
 
-  const $ = (id) => document.getElementById(id);
+        // Sum Maintenance
+        let totalEvMaint = 0; 
+        let totalIceMaint = 0;
+        costs.forEach(c => {
+            const target = c.target || 'ev'; 
+            const amt = parseFloat(c.amount) || 0;
+            if(target === 'ev') totalEvMaint += amt; 
+            else totalIceMaint += amt;
+        });
 
-  const state = D.loadState();
-  let currentEditId = null;      // charging entry id being edited
-  let currentEditCostId = null;  // cost id being edited
+        // ICE Simulation
+        const totalMiles = totalKwh * settings.evEff;
+        const gallons = totalMiles / settings.iceMpg;
+        const liters = gallons * 4.54609;
+        const totalIceFuelCost = liters * settings.fuelPrice;
 
-  // ---------- normalise existing costs (backwards compatibility) ----------
-
-  function ensureCostAppliesDefaults() {
-    if (!Array.isArray(state.costs)) return;
-    for (const c of state.costs) {
-      if (!c) continue;
-      if (!c.applies) {
-        // старите записи по подразбиране – other (можеш да смениш на "ev" ако искаш)
-        c.applies = "other";
-      } else {
-        c.applies = String(c.applies).toLowerCase();
-      }
+        // Totals
+        const totalSpentEV = totalEvChargingCost + totalEvMaint;
+        const totalSpentICE = totalIceFuelCost + totalIceMaint;
+        
+        return { 
+            totalMiles, 
+            totalEvChargingCost, 
+            totalEvMaint, 
+            totalIceFuelCost, 
+            totalIceMaint, 
+            totalSpentEV, 
+            totalSpentICE, 
+            netBalance: totalSpentICE - totalSpentEV 
+        };
     }
-  }
+};
 
-  ensureCostAppliesDefaults();
+// --- 2. APP CORE (DATA & SETTINGS) ---
+const App = {
+    data: { logs: [], costs: [] },
+    settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
+    
+    init: function() {
+        const d = localStorage.getItem('ev_log_data'); 
+        if(d) try { this.data = JSON.parse(d); } catch(e){ console.error(e); }
+        
+        const s = localStorage.getItem('ev_log_settings'); 
+        if(s) try { this.settings = JSON.parse(s); } catch(e){ console.error(e); }
+        
+        // Ensure arrays exist if JSON was partial
+        if(!this.data.logs) this.data.logs = [];
+        if(!this.data.costs) this.data.costs = [];
+    },
+    save: function() {
+        localStorage.setItem('ev_log_data', JSON.stringify(this.data));
+        localStorage.setItem('ev_log_settings', JSON.stringify(this.settings));
+    },
+    addLog: function(e) { e.id = Date.now(); this.data.logs.unshift(e); this.save(); },
+    deleteLog: function(id) { this.data.logs = this.data.logs.filter(i => i.id !== id); this.save(); },
+    addCost: function(e) { e.id = Date.now(); this.data.costs.unshift(e); this.save(); },
+    deleteCost: function(id) { this.data.costs = this.data.costs.filter(i => i.id !== id); this.save(); }
+};
 
-  // ---------- tabs ----------
-
-  function wireTabs() {
-    const tabs = document.querySelectorAll(".tab");
-    const btns = document.querySelectorAll(".tabbtn");
-
-    function activate(name) {
-      tabs.forEach((t) => {
-        t.classList.toggle("active", t.id === name);
-      });
-      btns.forEach((b) => {
-        b.classList.toggle("active", b.dataset.tab === name);
-      });
-    }
-
-    btns.forEach((b) =>
-      b.addEventListener("click", () => activate(b.dataset.tab))
-    );
-
-    activate("log");
-  }
-
-  // ---------- settings sync ----------
-
-  function syncSettingsToInputs() {
-    $("p_public").value = state.settings.public;
-    $("p_public_xp").value = state.settings.public_xp;
-    $("p_home").value = state.settings.home;
-    $("p_home_xp").value = state.settings.home_xp;
-    $("p_hw").value = state.settings.chargerHardware || 0;
-    $("p_install").value = state.settings.chargerInstall || 0;
-  }
-
-  function saveSettingsFromInputs() {
-    const s = state.settings;
-    s.public = parseFloat($("p_public").value) || 0;
-    s.public_xp = parseFloat($("p_public_xp").value) || 0;
-    s.home = parseFloat($("p_home").value) || 0;
-    s.home_xp = parseFloat($("p_home_xp").value) || 0;
-    s.chargerHardware = parseFloat($("p_hw").value) || 0;
-    s.chargerInstall = parseFloat($("p_install").value) || 0;
-    D.saveState(state);
-    U.toast("Settings saved", "good");
-  }
-
-  // ---------- helpers ----------
-
-  function todayISO() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  function autoPriceForType(type) {
-    const s = state.settings;
-    switch (type) {
-      case "public":
-        return s.public;
-      case "public-xp":
-        return s.public_xp;
-      case "home":
-        return s.home;
-      case "home-xp":
-        return s.home_xp;
-      default:
-        return 0;
-    }
-  }
-
-  function resetEditMode() {
-    currentEditId = null;
-    const addBtn = $("addEntry");
-    if (addBtn) {
-      addBtn.textContent = "Add entry";
-    }
-  }
-
-  function resetCostEditMode() {
-    currentEditCostId = null;
-    const btn = $("c_add");
-    if (btn) {
-      btn.textContent = "Add cost";
-    }
-  }
-
-  function startEditEntry(id) {
-    if (!id) {
-      U.toast("Missing entry id", "bad");
-      return;
-    }
-    const entry = state.entries.find((e) => e.id === id);
-    if (!entry) {
-      U.toast("Entry not found", "bad");
-      return;
-    }
-
-    currentEditId = id;
-
-    $("date").value = entry.date || todayISO();
-    $("kwh").value = entry.kwh;
-    $("type").value = entry.type;
-    $("price").value = entry.price;
-    $("note").value = entry.note || "";
-
-    const addBtn = $("addEntry");
-    if (addBtn) {
-      addBtn.textContent = "Update entry";
-    }
-
-    U.toast("Editing entry", "info");
-  }
-
-  function startEditCost(id) {
-    if (!id) {
-      U.toast("Missing cost id", "bad");
-      return;
-    }
-    const cost = state.costs.find((c) => c.id === id);
-    if (!cost) {
-      U.toast("Cost not found", "bad");
-      return;
-    }
-
-    currentEditCostId = id;
-
-    $("c_date").value = cost.date || todayISO();
-    $("c_category").value = cost.category || "Tyres";
-    $("c_amount").value = cost.amount;
-    $("c_note").value = cost.note || "";
-
-    const appliesSelect = $("c_applies");
-    if (appliesSelect) {
-      const v = (cost.applies || "other").toLowerCase();
-      if (v === "ev" || v === "ice" || v === "both" || v === "other") {
-        appliesSelect.value = v;
-      } else {
-        appliesSelect.value = "other";
-      }
-    }
-
-    const btn = $("c_add");
-    if (btn) {
-      btn.textContent = "Update cost";
-    }
-
-    U.toast("Editing cost", "info");
-  }
-
-  function getAppliesFromForm() {
-    const el = $("c_applies");
-    if (!el) return "other";
-    const v = (el.value || "").toLowerCase();
-    if (v === "ev" || v === "ice" || v === "both" || v === "other") {
-      return v;
-    }
-    return "other";
-  }
-
-  // ---------- maintenance totals (all-time, split EV/ICE) ----------
-
-  function computeMaintenanceTotals() {
-    const costs = state.costs || [];
-    let evOnly = 0;
-    let iceOnly = 0;
-    let both = 0;
-    let other = 0;
-
-    for (const c of costs) {
-      if (!c) continue;
-      const amount = Number(c.amount ?? 0) || 0;
-      if (!amount) continue;
-
-      const a = (c.applies || "other").toLowerCase();
-      if (a === "ev") {
-        evOnly += amount;
-      } else if (a === "ice") {
-        iceOnly += amount;
-      } else if (a === "both") {
-        both += amount;
-      } else {
-        other += amount;
-      }
-    }
-
-    const ev = evOnly + both;
-    const ice = iceOnly + both;
-    const total = evOnly + iceOnly + both + other;
-
-    return {
-      ev,
-      ice,
-      both,
-      other,
-      total
-    };
-  }
-
-  function computeMaintenanceTotalAllTime() {
-    return computeMaintenanceTotals().total;
-  }
-
-  // ---------- insurance totals (all-time, split EV/ICE) ----------
-
-  function computeInsuranceTotals() {
-    const costs = state.costs || [];
-    let evOnly = 0;
-    let iceOnly = 0;
-    let both = 0;
-    let other = 0;
-
-    for (const c of costs) {
-      if (!c) continue;
-      const amount = Number(c.amount ?? 0) || 0;
-      if (!amount) continue;
-
-      const cat = String(c.category || "").toLowerCase();
-      if (cat !== "insurance") continue;
-
-      const a = (c.applies || "other").toLowerCase();
-      if (a === "ev") {
-        evOnly += amount;
-      } else if (a === "ice") {
-        iceOnly += amount;
-      } else if (a === "both") {
-        both += amount;
-      } else {
-        other += amount;
-      }
-    }
-
-    const ev = evOnly + both;
-    const ice = iceOnly + both;
-    const total = evOnly + iceOnly + both + other;
-
-    return {
-      ev,
-      ice,
-      both,
-      other,
-      total
-    };
-  }
-
-  function renderMaintenanceTotalInCosts() {
-    try {
-      const container = $("costTable");
-      if (!container) return;
-
-      const totals = computeMaintenanceTotals();
-      let el = $("maintenanceTotalCosts");
-      if (!el) {
-        el = document.createElement("p");
-        el.id = "maintenanceTotalCosts";
-        el.className = "small";
-        el.style.marginTop = "6px";
-        if (container.parentNode) {
-          container.parentNode.insertBefore(el, container.nextSibling);
+// --- 3. UI RENDER LOGIC ---
+const UILog = {
+    renderList: function(logs) {
+        const container = document.getElementById('logTable'); 
+        if (!container) return;
+        if (!logs || logs.length === 0) { 
+            container.innerHTML = '<p style="color:#666; text-align:center;">Няма записи.</p>'; 
+            return; 
         }
-      }
-
-      const diff = totals.ev - totals.ice;
-
-      el.textContent =
-        "Maintenance totals (all time) – " +
-        "EV: " + U.fmtGBP(totals.ev) +
-        ", ICE: " + U.fmtGBP(totals.ice) +
-        ", Both: " + U.fmtGBP(totals.both) +
-        ", Other: " + U.fmtGBP(totals.other) +
-        ", Diff (EV–ICE): " + U.fmtGBP(diff);
-    } catch (e) {
-      console && console.warn && console.warn("renderMaintenanceTotalInCosts failed", e);
+        let html = '';
+        logs.forEach(log => {
+            const totalCost = (log.total !== undefined) ? parseFloat(log.total) : (log.kwh * log.price);
+            html += `
+            <div class="log-entry">
+                <div class="log-info">
+                    <div class="log-main">
+                        <span class="log-kwh">${log.kwh} kWh</span>
+                        <span class="log-cost">£${totalCost.toFixed(2)}</span>
+                    </div>
+                    <div class="log-sub">${log.date} • ${log.type}</div>
+                    <div class="log-note">${log.note || ''}</div>
+                </div>
+                <div class="log-actions">
+                    <button onclick="AppActions.editLogEntry(${log.id})" class="btn-icon edit">✎</button>
+                    <button onclick="AppActions.deleteLogEntry(${log.id})" class="btn-icon delete">✖</button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    },
+    renderPreview: function(calcResult) {
+        const div = document.getElementById('log-preview'); 
+        if (!div) return;
+        if (!calcResult || calcResult.rangeMiles <= 0) { div.style.display = 'none'; return; }
+        const color = calcResult.isCheaper ? '#4CAF50' : '#f44336'; 
+        const text = calcResult.isCheaper ? 'СПЕСТЯВАШ' : 'ЗАГУБА';
+        div.style.display = 'block';
+        div.innerHTML = `
+            <div style="background: #1a1a1a; border: 1px solid ${color}; border-radius: 8px; padding: 10px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9em; color:#ccc;">
+                    <span>⚡ EV: <strong>£${calcResult.costEV.toFixed(2)}</strong></span>
+                    <span>⛽ ICE: <strong>£${calcResult.costICE.toFixed(2)}</strong></span>
+                </div>
+                <div style="text-align:center; border-top:1px solid #333; padding-top:5px; margin-top:5px;">
+                    <span style="color:${color}; font-weight:bold; font-size:1.1em;">${text} £${Math.abs(calcResult.savings).toFixed(2)}</span>
+                    <div style="font-size:0.8em; color:#666;">при пробег ~${calcResult.rangeMiles.toFixed(0)} mi</div>
+                </div>
+            </div>`;
     }
-  }
-
-  function renderMaintenanceTotalInCompare() {
-    try {
-      const container = $("compareStats");
-      if (!container) return;
-
-      const totals = computeMaintenanceTotals();
-      let el = $("maintenanceTotalCompare");
-      if (!el) {
-        el = document.createElement("p");
-        el.id = "maintenanceTotalCompare";
-        el.className = "small";
-        el.style.marginTop = "8px";
-        container.appendChild(el);
-      }
-
-      const diff = totals.ev - totals.ice;
-
-      el.textContent =
-        "Maintenance (all time) – " +
-        "EV: " + U.fmtGBP(totals.ev) +
-        ", ICE: " + U.fmtGBP(totals.ice) +
-        ", Both: " + U.fmtGBP(totals.both) +
-        ", Other: " + U.fmtGBP(totals.other) +
-        ", Diff (EV–ICE): " + U.fmtGBP(diff);
-    } catch (e) {
-      console && console.warn && console.warn("renderMaintenanceTotalInCompare failed", e);
-    }
-  }
-
-  // ---------- costs filter controls (UI) ----------
-
-  function ensureCostFilterControls() {
-    // ако вече има select – не правим нищо
-    if ($("c_filter_applies")) return;
-
-    const container = $("costTable");
-    if (!container || !container.parentNode) return;
-
-    const wrapper = document.createElement("div");
-    wrapper.style.display = "flex";
-    wrapper.style.alignItems = "center";
-    wrapper.style.gap = "6px";
-    wrapper.style.marginBottom = "6px";
-
-    const label = document.createElement("label");
-    label.setAttribute("for", "c_filter_applies");
-    label.textContent = "Filter:";
-
-    const select = document.createElement("select");
-    select.id = "c_filter_applies";
-
-    const options = [
-      ["all", "All"],
-      ["ev", "EV only"],
-      ["ice", "ICE only"],
-      ["both", "Both"],
-      ["other", "Other"]
-    ];
-
-    options.forEach(([val, text]) => {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = text;
-      select.appendChild(opt);
-    });
-
-    select.addEventListener("change", () => {
-      renderAll();
-    });
-
-    wrapper.appendChild(label);
-    wrapper.appendChild(select);
-
-    container.parentNode.insertBefore(wrapper, container);
-  }
-
-  function getCostFilterValue() {
-    const sel = $("c_filter_applies");
-    if (!sel) return "all";
-    const v = (sel.value || "all").toLowerCase();
-    if (v === "ev" || v === "ice" || v === "both" || v === "other" || v === "all") {
-      return v;
-    }
-    return "all";
-  }
-
-  // ---------- rendering ----------
-
-  function renderAll() {
-    U.renderLogTable("logTable", state.entries);
-
-    // филтрирани разходи за таблицата (Totals / Compare вървят по всички costs)
-    let costsToRender = state.costs;
-    const filter = getCostFilterValue();
-    if (filter !== "all") {
-      costsToRender = (state.costs || []).filter((c) => {
-        const a = (c.applies || "other").toLowerCase();
-        return a === filter;
-      });
-    }
-
-    U.renderCostTable("costTable", costsToRender);
-
-    const summary = C.buildSummary(state.entries);
-    U.renderSummary(
-      ["summary_this", "summary_last", "summary_avg"],
-      summary
-    );
-
-    // EV vs ICE compare (енергия) + добавяме поддръжка и insurance в data
-    const cmp = C.buildCompare(state.entries, state.settings);
-
-    const mt = computeMaintenanceTotals();
-    cmp.maintEv = mt.ev;
-    cmp.maintIce = mt.ice;
-    cmp.maintBoth = mt.both;
-    cmp.maintOther = mt.other;
-
-    const ins = computeInsuranceTotals();
-    cmp.insuranceEv = ins.ev;
-    cmp.insuranceIce = ins.ice;
-    cmp.insuranceBoth = ins.both;
-    cmp.insuranceOther = ins.other;
-    cmp.insuranceTotal = ins.total;
-
-    U.renderCompare("compareStats", cmp);
-
-    // maintenance totals от Costs (all time) – винаги за всички costs
-    renderMaintenanceTotalInCosts();
-    renderMaintenanceTotalInCompare();
-  }
-
-  // ---------- add / update entry ----------
-
-  function onAddEntry() {
-    let date = $("date").value || todayISO();
-    const kwh = parseFloat($("kwh").value);
-    const type = $("type").value;
-    let price = parseFloat($("price").value);
-    const note = $("note").value.trim();
-
-    if (isNaN(kwh) || kwh <= 0) {
-      U.toast("Please enter kWh", "bad");
-      return;
-    }
-
-    if (isNaN(price) || price <= 0) {
-      price = autoPriceForType(type);
-    }
-
-    if (!currentEditId) {
-      // normal add
-      const entry = {
-        id:
-          window.crypto && window.crypto.randomUUID
-            ? window.crypto.randomUUID()
-            : "e_" + Date.now().toString(36),
-        date,
-        kwh,
-        type,
-        price,
-        note
-      };
-
-      state.entries.push(entry);
-      D.saveState(state);
-      renderAll();
-      U.toast("Entry added", "good");
-    } else {
-      // update existing
-      const idx = state.entries.findIndex((e) => e.id === currentEditId);
-      if (idx === -1) {
-        U.toast("Entry to update not found", "bad");
-        resetEditMode();
-        return;
-      }
-
-      const entry = state.entries[idx];
-      entry.date = date;
-      entry.kwh = kwh;
-      entry.type = type;
-      entry.price = price;
-      entry.note = note;
-
-      D.saveState(state);
-      renderAll();
-      U.toast("Entry updated", "good");
-      resetEditMode();
-    }
-  }
-
-  function onSameAsLast() {
-    if (!state.entries.length) {
-      U.toast("No previous entry", "info");
-      return;
-    }
-    const last = state.entries[state.entries.length - 1];
-    $("date").value = last.date;
-    $("kwh").value = last.kwh;
-    $("type").value = last.type;
-    $("price").value = last.price;
-    $("note").value = last.note || "";
-    U.toast("Filled from last", "info");
-  }
-
-  // ---------- add / update cost ----------
-
-  function onAddCost() {
-    const date = $("c_date").value || todayISO();
-    const category = $("c_category").value;
-    const amount = parseFloat($("c_amount").value);
-    const note = $("c_note").value.trim();
-    const applies = getAppliesFromForm();
-
-    if (isNaN(amount) || amount <= 0) {
-      U.toast("Please enter amount", "bad");
-      return;
-    }
-
-    if (!currentEditCostId) {
-      const cost = {
-        id:
-          window.crypto && window.crypto.randomUUID
-            ? window.crypto.randomUUID()
-            : "c_" + Date.now().toString(36),
-        date,
-        category,
-        amount,
-        note,
-        applies
-      };
-
-      state.costs.push(cost);
-      D.saveState(state);
-      renderAll();
-      U.toast("Cost added", "good");
-    } else {
-      const idx = state.costs.findIndex((c) => c.id === currentEditCostId);
-      if (idx === -1) {
-        U.toast("Cost to update not found", "bad");
-        resetCostEditMode();
-        return;
-      }
-
-      const cost = state.costs[idx];
-      cost.date = date;
-      cost.category = category;
-      cost.amount = amount;
-      cost.note = note;
-      cost.applies = applies;
-
-      D.saveState(state);
-      renderAll();
-      U.toast("Cost updated", "good");
-      resetCostEditMode();
-    }
-  }
-
-  // ---------- delete entry / cost ----------
-
-  function handleDeleteEntry(id) {
-    if (!id) {
-      U.toast("Missing entry id", "bad");
-      return;
-    }
-    const idx = state.entries.findIndex((e) => e.id === id);
-    if (idx === -1) {
-      U.toast("Entry not found", "bad");
-      return;
-    }
-    const ok = window.confirm("Delete this entry?");
-    if (!ok) return;
-
-    state.entries.splice(idx, 1);
-    if (currentEditId === id) {
-      resetEditMode();
-    }
-    D.saveState(state);
-    renderAll();
-    U.toast("Entry deleted", "good");
-  }
-
-  function handleDeleteCost(id) {
-    if (!id) {
-      U.toast("Missing cost id", "bad");
-      return;
-    }
-    const idx = state.costs.findIndex((c) => c.id === id);
-    if (idx === -1) {
-      U.toast("Cost not found", "bad");
-      return;
-    }
-    const ok = window.confirm("Delete this cost?");
-    if (!ok) return;
-
-    state.costs.splice(idx, 1);
-    if (currentEditCostId === id) {
-      resetCostEditMode();
-    }
-    D.saveState(state);
-    renderAll();
-    U.toast("Cost deleted", "good");
-  }
-
-  function onLogTableClick(ev) {
-    const target = ev.target;
-    if (!target) return;
-    const btn = target.closest("button[data-action]");
-    if (!btn) return;
-
-    const action = btn.getAttribute("data-action");
-    const id = btn.getAttribute("data-id");
-
-    if (action === "delete-entry") {
-      handleDeleteEntry(id);
-    } else if (action === "edit-entry") {
-      startEditEntry(id);
-    }
-  }
-
-  function onCostTableClick(ev) {
-    const target = ev.target;
-    if (!target) return;
-    const btn = target.closest("button[data-action]");
-    if (!btn) return;
-
-    const action = btn.getAttribute("data-action");
-    const id = btn.getAttribute("data-id");
-
-    if (action === "delete-cost") {
-      handleDeleteCost(id);
-    } else if (action === "edit-cost") {
-      startEditCost(id);
-    }
-  }
-
-  // ---------- CSV export helpers ----------
-
-  function csvEscape(value) {
-    if (value == null) return "";
-    const s = String(value);
-    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-  }
-
-  function downloadCSV(filename, csvText) {
-    try {
-      const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      U.toast("CSV exported", "good");
-    } catch (e) {
-      console.error("CSV download failed", e);
-      U.toast("CSV export failed", "bad");
-    }
-  }
-
-  function exportEntriesCSV() {
-    if (!state.entries.length) {
-      U.toast("No entries to export", "info");
-      return;
-    }
-
-    const header = [
-      "Date",
-      "kWh",
-      "Type",
-      "Price_per_kWh",
-      "Cost",
-      "Note"
-    ];
-
-    const rows = state.entries
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((e) => {
-        const cost = (e.kwh || 0) * (e.price || 0);
-        return [
-          csvEscape(e.date || ""),
-          csvEscape(e.kwh != null ? e.kwh : ""),
-          csvEscape(e.type || ""),
-          csvEscape(e.price != null ? e.price : ""),
-          csvEscape(cost),
-          csvEscape(e.note || "")
-        ].join(",");
-      });
-
-    const csv = [header.join(","), ...rows].join("\n");
-    const today = todayISO();
-    const filename = `ev_log_entries_${today}.csv`;
-    downloadCSV(filename, csv);
-  }
-
-  function exportCostsCSV() {
-    if (!state.costs.length) {
-      U.toast("No costs to export", "info");
-      return;
-    }
-
-    const header = ["Date", "Category", "Amount", "Note", "AppliesTo"];
-
-    const rows = state.costs
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((c) => {
-        return [
-          csvEscape(c.date || ""),
-          csvEscape(c.category || ""),
-          csvEscape(c.amount != null ? c.amount : ""),
-          csvEscape(c.note || ""),
-          csvEscape(c.applies || "other")
-        ].join(",");
-      });
-
-    const csv = [header.join(","), ...rows].join("\n");
-    const today = todayISO();
-    const filename = `ev_log_costs_${today}.csv`;
-    downloadCSV(filename, csv);
-  }
-
-  function ensureExportButtons() {
-    const logTable = $("logTable");
-    if (logTable && !$("exportEntriesCsv")) {
-      const btn = document.createElement("button");
-      btn.id = "exportEntriesCsv";
-      btn.textContent = "Export log CSV";
-      btn.type = "button";
-      btn.style.marginTop = "6px";
-      btn.addEventListener("click", exportEntriesCSV);
-      if (logTable.parentNode) {
-        logTable.parentNode.insertBefore(btn, logTable.nextSibling);
-      }
-    }
-
-    const costTable = $("costTable");
-    if (costTable && !$("exportCostsCsv")) {
-      const btn2 = document.createElement("button");
-      btn2.id = "exportCostsCsv";
-      btn2.textContent = "Export costs CSV";
-      btn2.type = "button";
-      btn2.style.marginTop = "6px";
-      btn2.addEventListener("click", exportCostsCSV);
-      if (costTable.parentNode) {
-        costTable.parentNode.insertBefore(btn2, costTable.nextSibling);
-      }
-    }
-  }
-
-  // ---------- backup / restore ----------
-
-  async function exportBackup() {
-    try {
-      const backup = JSON.stringify(state);
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(backup);
-        U.toast("Backup copied to clipboard", "good");
-      } else {
-        const ok = window.prompt("Backup JSON (copy this):", backup);
-        if (ok !== null) {
-          U.toast("Backup shown (copy manually)", "info");
+};
+
+// --- 4. APP ACTIONS (CONTROLLER) ---
+let editModeId = null;
+let editCostModeId = null;
+let myChart = null;
+
+const AppActions = {
+    init: function() {
+        App.init(); // Load data first
+        
+        this.bindNav();
+        this.bindLog();
+        this.bindCosts();
+        this.bindSettings();
+        this.bindCompare();
+        
+        // Initial Render
+        UILog.renderList(App.data.logs);
+        this.renderCostsList();
+        
+        // Populate dates
+        const today = new Date().toISOString().split('T')[0];
+        if(document.getElementById('date')) document.getElementById('date').value = today;
+        if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
+
+        // Force Stats Update to fix the "Zero" issue on load
+        this.updateStats();
+    },
+
+    bindNav: function() {
+        const tabs = document.querySelectorAll('.tabbtn');
+        const sections = document.querySelectorAll('.tab');
+
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                sections.forEach(s => s.classList.remove('active'));
+                
+                btn.classList.add('active');
+                const targetId = btn.getAttribute('data-tab');
+                document.getElementById(targetId).classList.add('active');
+
+                if(targetId === 'compare') {
+                    this.updateStats();
+                }
+            });
+        });
+    },
+
+    // --- LOG LOGIC ---
+    bindLog: function() {
+        const btnAdd = document.getElementById('addEntry');
+        if (btnAdd) {
+            btnAdd.addEventListener('click', () => {
+                const date = document.getElementById('date').value;
+                const kwh = parseFloat(document.getElementById('kwh').value);
+                const price = parseFloat(document.getElementById('price').value);
+                const type = document.getElementById('type').value;
+                const note = document.getElementById('note').value;
+
+                if (!date || isNaN(kwh) || isNaN(price)) return alert('Моля попълнете всички полета');
+
+                if (editModeId) {
+                    const index = App.data.logs.findIndex(l => l.id === editModeId);
+                    if (index !== -1) {
+                        App.data.logs[index] = { id: editModeId, date, kwh, price, type, note, total: kwh * price };
+                        App.save();
+                    }
+                    editModeId = null;
+                    btnAdd.innerText = "Add Entry";
+                    btnAdd.style.backgroundColor = ""; 
+                } else {
+                    App.addLog({ date, kwh, price, type, note, total: kwh * price });
+                }
+
+                UILog.renderList(App.data.logs);
+                this.clearLogForm();
+                this.updateStats(); // Refresh stats in background
+            });
         }
-      }
-    } catch (e) {
-      console.error(e);
-      U.toast("Backup failed", "bad");
+        
+        // Preview listeners
+        const updatePreview = () => {
+             const kwh = parseFloat(document.getElementById('kwh').value) || 0;
+             const price = parseFloat(document.getElementById('price').value) || 0;
+             const res = Calc.compare(kwh, price, parseFloat(App.settings.evEff), parseFloat(App.settings.iceMpg), parseFloat(App.settings.fuelPrice));
+             UILog.renderPreview(res);
+        };
+
+        ['kwh', 'price'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updatePreview);
+        });
+        
+        document.getElementById('type').addEventListener('change', (e) => {
+             const opt = e.target.options[e.target.selectedIndex];
+             if(opt.dataset.price) {
+                 document.getElementById('price').value = opt.dataset.price;
+                 updatePreview();
+             }
+        });
+
+        document.getElementById('sameAsLast').addEventListener('click', () => {
+            if(App.data.logs.length > 0) {
+                const last = App.data.logs[0];
+                document.getElementById('price').value = last.price;
+                document.getElementById('type').value = last.type;
+                document.getElementById('note').value = last.note;
+                updatePreview();
+            }
+        });
+    },
+
+    editLogEntry: function(id) {
+        const entry = App.data.logs.find(l => l.id === id);
+        if(!entry) return;
+        document.getElementById('date').value = entry.date;
+        document.getElementById('kwh').value = entry.kwh;
+        document.getElementById('price').value = entry.price;
+        document.getElementById('type').value = entry.type;
+        document.getElementById('note').value = entry.note;
+        
+        // Switch to Log tab
+        document.querySelector('[data-tab="log"]').click();
+        document.getElementById('log').scrollIntoView({behavior: 'smooth'});
+
+        editModeId = id;
+        const btn = document.getElementById('addEntry');
+        btn.innerText = "Update Entry";
+        btn.style.backgroundColor = "#ff9800";
+    },
+
+    deleteLogEntry: function(id) {
+        if(confirm('Delete log?')) {
+            App.deleteLog(id);
+            UILog.renderList(App.data.logs);
+            this.updateStats();
+            if(editModeId === id) this.clearLogForm();
+        }
+    },
+
+    clearLogForm: function() {
+        document.getElementById('kwh').value = '';
+        document.getElementById('note').value = '';
+        document.getElementById('log-preview').style.display = 'none';
+        editModeId = null;
+        const btn = document.getElementById('addEntry');
+        btn.innerText = "Add Entry";
+        btn.style.backgroundColor = ""; 
+    },
+
+    // --- COSTS LOGIC ---
+    bindCosts: function() {
+        const btn = document.getElementById('c_add');
+        if(btn) {
+            btn.addEventListener('click', () => {
+                const date = document.getElementById('c_date').value;
+                const amount = parseFloat(document.getElementById('c_amount').value);
+                const cat = document.getElementById('c_category').value;
+                const note = document.getElementById('c_note').value;
+                const target = document.getElementById('c_target').value; 
+                
+                if(!amount || !date) return alert('Enter amount and date');
+
+                if (editCostModeId) {
+                    const index = App.data.costs.findIndex(c => c.id === editCostModeId);
+                    if (index !== -1) {
+                        App.data.costs[index] = { id: editCostModeId, date, amount, cat, note, target };
+                        App.save();
+                    }
+                    editCostModeId = null;
+                    btn.innerText = "Add Cost";
+                    btn.style.backgroundColor = "";
+                } else {
+                    App.addCost({ date, amount, cat, note, target });
+                }
+
+                this.renderCostsList();
+                this.clearCostForm();
+                this.updateStats();
+            });
+        }
+    },
+
+    renderCostsList: function() {
+        const div = document.getElementById('costTable');
+        if(!div) return;
+        let html = '';
+        if(App.data.costs.length === 0) div.innerHTML = '<p style="color:#666;">Няма разходи.</p>';
+        else {
+            App.data.costs.forEach(c => {
+                const isIce = (c.target === 'ice');
+                html += `<div class="log-entry" style="border-left: 3px solid ${isIce ? '#f44336' : '#4CAF50'}">
+                    <div class="log-info"><span style="color:#fff;">${c.date} ${isIce?'⛽':'🚗'} <strong>${c.cat}</strong></span><br><small style="color:#888;">${c.note}</small></div>
+                    <div><span style="color:#fff; font-weight:bold; margin-right:10px;">£${parseFloat(c.amount).toFixed(2)}</span></div>
+                    <div class="log-actions"><button onclick="AppActions.editCostEntry(${c.id})" class="btn-icon edit">✎</button><button onclick="AppActions.deleteCostEntry(${c.id})" class="btn-icon delete">✖</button></div>
+                </div>`;
+            });
+            div.innerHTML = html;
+        }
+    },
+
+    editCostEntry: function(id) {
+        const entry = App.data.costs.find(c => c.id === id);
+        if(!entry) return;
+        document.getElementById('c_date').value = entry.date;
+        document.getElementById('c_amount').value = entry.amount;
+        document.getElementById('c_category').value = entry.cat;
+        document.getElementById('c_note').value = entry.note;
+        document.getElementById('c_target').value = entry.target || 'ev';
+        
+        document.querySelector('[data-tab="costs"]').click();
+        document.getElementById('costs').scrollIntoView({behavior: 'smooth'});
+        
+        editCostModeId = id;
+        const btn = document.getElementById('c_add');
+        btn.innerText = "Update Cost";
+        btn.style.backgroundColor = "#ff9800";
+    },
+
+    deleteCostEntry: function(id) {
+        if(confirm('Delete cost?')) {
+            App.deleteCost(id);
+            this.renderCostsList();
+            this.updateStats();
+            if(editCostModeId === id) this.clearCostForm();
+        }
+    },
+
+    clearCostForm: function() {
+        document.getElementById('c_amount').value = '';
+        document.getElementById('c_note').value = '';
+        document.getElementById('c_target').value = 'ev'; 
+        editCostModeId = null;
+        const btn = document.getElementById('c_add');
+        btn.innerText = "Add Cost";
+        btn.style.backgroundColor = "";
+    },
+
+    // --- STATS & CHART ---
+    updateStats: function() {
+        // Calculate
+        const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
+
+        // Update DOM
+        const elIds = {
+            'stat-miles': stats.totalMiles.toFixed(0),
+            'stat-ev-charge': '£' + stats.totalEvChargingCost.toFixed(2),
+            'stat-ev-maint': '£' + stats.totalEvMaint.toFixed(2),
+            'stat-ice-fuel': '£' + stats.totalIceFuelCost.toFixed(2),
+            'stat-ice-maint': '£' + stats.totalIceMaint.toFixed(2)
+        };
+
+        for(const [id, val] of Object.entries(elIds)){
+            const el = document.getElementById(id);
+            if(el) el.innerText = val;
+        }
+
+        // Update Big Card
+        const card = document.getElementById('tco-card');
+        if(card) {
+            const isPositive = stats.netBalance >= 0;
+            const color = isPositive ? '#4CAF50' : '#f44336';
+            card.style.border = `2px solid ${color}`;
+            card.innerHTML = `
+                <div style="font-size:0.9rem; color:#ccc;">Общ Резултат (Savings)</div>
+                <div style="font-size:1.8rem; font-weight:bold; color:${color}; margin:10px 0;">${isPositive ? '+' : ''}£${stats.netBalance.toFixed(2)}</div>
+                <div style="font-size:0.8rem; color:#888;">ICE Total (£${stats.totalSpentICE.toFixed(0)}) vs EV Total (£${stats.totalSpentEV.toFixed(0)})</div>`;
+        }
+
+        this.renderChart(App.data.logs, App.data.costs, App.settings);
+    },
+
+    renderChart: function(logs, costs, settings) {
+        const ctx = document.getElementById('tcoChart');
+        if(!ctx) return;
+
+        // Prepare Data
+        let allEvents = [];
+        logs.forEach(l => {
+            const cost = (l.total !== undefined) ? parseFloat(l.total) : (l.kwh * l.price);
+            const miles = l.kwh * settings.evEff;
+            const fuelCost = (miles / settings.iceMpg) * 4.54609 * settings.fuelPrice;
+            allEvents.push({ date: l.date, evCost: cost, iceCost: fuelCost });
+        });
+
+        costs.forEach(c => {
+            const amt = parseFloat(c.amount);
+            if(c.target === 'ice') allEvents.push({ date: c.date, evCost: 0, iceCost: amt });
+            else allEvents.push({ date: c.date, evCost: amt, iceCost: 0 });
+        });
+
+        allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let labels = [];
+        let evData = [];
+        let iceData = [];
+        let cumulativeEv = 0;
+        let cumulativeIce = 0;
+
+        allEvents.forEach(e => {
+            cumulativeEv += e.evCost;
+            cumulativeIce += e.iceCost;
+            
+            // Push point
+            labels.push(e.date);
+            evData.push(cumulativeEv);
+            iceData.push(cumulativeIce);
+        });
+
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'ICE (ДВГ) Total',
+                        data: iceData,
+                        borderColor: '#f44336',
+                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 2
+                    },
+                    {
+                        label: 'EV (Ток) Total',
+                        data: evData,
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { display: false }, // Hide lots of dates for cleaner look
+                    y: { 
+                        ticks: { color: '#888', callback: (v) => '£'+v }, 
+                        grid: { color: '#333' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#ccc' } }
+                }
+            }
+        });
+    },
+
+    bindSettings: function() {
+        if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = App.settings.evEff;
+        if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = App.settings.iceMpg;
+        if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = App.settings.fuelPrice;
+
+        const btnSave = document.getElementById('saveCompareSettings');
+        if(btnSave) {
+            btnSave.addEventListener('click', () => {
+                App.settings.evEff = parseFloat(document.getElementById('set_ev_eff').value);
+                App.settings.iceMpg = parseFloat(document.getElementById('set_ice_mpg').value);
+                App.settings.fuelPrice = parseFloat(document.getElementById('set_fuel_price').value);
+                App.save();
+                AppActions.updateStats(); // Recalculate immediately
+                alert('Saved!');
+            });
+        }
+        
+        const btnExport = document.getElementById('exportBackup');
+        if(btnExport) {
+            btnExport.addEventListener('click', () => {
+                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(App.data));
+                 const a = document.createElement('a');
+                 a.href = dataStr; a.download = "ev_backup.json"; a.click();
+            });
+        }
+
+        const inpImport = document.getElementById('importBackup');
+        if(inpImport) {
+            inpImport.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if(imported.logs) App.data = imported;
+                        App.save();
+                        location.reload();
+                    } catch(err) { alert('Invalid JSON'); }
+                };
+                reader.readAsText(file);
+            });
+        }
+    },
+
+    bindCompare: function() {
+        const btn = document.getElementById('btn-calc-trip');
+        if(btn) {
+            btn.addEventListener('click', () => {
+                const dist = parseFloat(document.getElementById('cmp-dist').value);
+                if(!dist) return;
+                
+                // Get current price from log input as "reference" price
+                const evPrice = parseFloat(document.getElementById('price').value) || 0.56;
+
+                const costEV = (dist / App.settings.evEff) * evPrice;
+                const costICE = (dist / App.settings.iceMpg) * 4.54609 * App.settings.fuelPrice;
+                const diff = costICE - costEV;
+                const isCheaper = diff > 0;
+
+                const resDiv = document.getElementById('compare-result');
+                resDiv.innerHTML = `
+                    <div style="background:#222; border-left: 4px solid ${isCheaper ? '#4CAF50' : '#f44336'}; padding:15px; margin-top:20px; border-radius:4px;">
+                        <h4 style="margin:0 0 10px 0; color:#fff;">За ${dist} мили (Trip)</h4>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:#ccc;">
+                            <span>🔋 EV: <strong>£${costEV.toFixed(2)}</strong></span>
+                            <span>⛽ ICE: <strong>£${costICE.toFixed(2)}</strong></span>
+                        </div>
+                        <div style="font-size:1.1em; font-weight:bold; color:${isCheaper ? '#4CAF50' : '#f44336'}">
+                            ${isCheaper ? 'Спестяваш' : 'По-скъпо с'} £${Math.abs(diff).toFixed(2)}
+                        </div>
+                    </div>`;
+            });
+        }
     }
-  }
+};
 
-  function importBackup() {
-    const raw = window.prompt(
-      "Paste backup JSON here. Current data will be replaced."
-    );
-    if (!raw) {
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-
-      if (
-        typeof parsed !== "object" ||
-        !parsed ||
-        !Array.isArray(parsed.entries) ||
-        !parsed.settings
-      ) {
-        U.toast("Invalid backup format", "bad");
-        return;
-      }
-
-      state.entries = Array.isArray(parsed.entries) ? parsed.entries : [];
-      state.costs = Array.isArray(parsed.costs) ? parsed.costs : [];
-      state.settings = Object.assign({}, state.settings, parsed.settings);
-
-      ensureCostAppliesDefaults();
-
-      D.saveState(state);
-      syncSettingsToInputs();
-      renderAll();
-      resetEditMode();
-      resetCostEditMode();
-      U.toast("Backup restored", "good");
-    } catch (e) {
-      console.error(e);
-      U.toast("Import failed", "bad");
-    }
-  }
-
-  // ---------- wiring ----------
-
-  function wire() {
-    $("date").value = todayISO();
-    $("c_date").value = todayISO();
-
-    // по подразбиране OTHER за нови разходи
-    const appliesSelect = $("c_applies");
-    if (appliesSelect && !appliesSelect.value) {
-      appliesSelect.value = "other";
-    }
-
-    $("addEntry").addEventListener("click", onAddEntry);
-    $("sameAsLast").addEventListener("click", onSameAsLast);
-
-    $("c_add").addEventListener("click", onAddCost);
-
-    $("savePrices").addEventListener("click", saveSettingsFromInputs);
-    $("exportBackup").addEventListener("click", exportBackup);
-    $("importBackup").addEventListener("click", importBackup);
-
-    const logContainer = $("logTable");
-    if (logContainer) {
-      logContainer.addEventListener("click", onLogTableClick);
-    }
-
-    const costContainer = $("costTable");
-    if (costContainer) {
-      costContainer.addEventListener("click", onCostTableClick);
-    }
-
-    syncSettingsToInputs();
-    wireTabs();
-    ensureCostFilterControls();
-    renderAll();
-    ensureExportButtons();
-    resetEditMode();
-    resetCostEditMode();
-  }
-
-  wire();
-})();
+// --- 5. INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    AppActions.init();
+});
