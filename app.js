@@ -1,6 +1,5 @@
 /* =========================================
    APP.JS - Combined Application Logic
-   Contains: Calc, App (Core), UILog, AppActions
    ========================================= */
 
 // --- 1. CALCULATOR LOGIC ---
@@ -21,16 +20,13 @@ const Calc = {
         let totalKwh = 0; 
         let totalEvChargingCost = 0;
         
-        // Sum EV Charging
         logs.forEach(l => {
             totalKwh += parseFloat(l.kwh) || 0;
-            // Handle both new 'total' field and calculate if missing
             let cost = (l.total !== undefined) ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price));
             if(isNaN(cost)) cost = 0;
             totalEvChargingCost += cost;
         });
 
-        // Sum Maintenance
         let totalEvMaint = 0; 
         let totalIceMaint = 0;
         costs.forEach(c => {
@@ -40,30 +36,23 @@ const Calc = {
             else totalIceMaint += amt;
         });
 
-        // ICE Simulation
         const totalMiles = totalKwh * settings.evEff;
         const gallons = totalMiles / settings.iceMpg;
         const liters = gallons * 4.54609;
         const totalIceFuelCost = liters * settings.fuelPrice;
 
-        // Totals
         const totalSpentEV = totalEvChargingCost + totalEvMaint;
         const totalSpentICE = totalIceFuelCost + totalIceMaint;
         
         return { 
-            totalMiles, 
-            totalEvChargingCost, 
-            totalEvMaint, 
-            totalIceFuelCost, 
-            totalIceMaint, 
-            totalSpentEV, 
-            totalSpentICE, 
+            totalMiles, totalEvChargingCost, totalEvMaint, 
+            totalIceFuelCost, totalIceMaint, totalSpentEV, totalSpentICE, 
             netBalance: totalSpentICE - totalSpentEV 
         };
     }
 };
 
-// --- 2. APP CORE (DATA & SETTINGS) ---
+// --- 2. APP CORE ---
 const App = {
     data: { logs: [], costs: [] },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
@@ -75,7 +64,6 @@ const App = {
         const s = localStorage.getItem('ev_log_settings'); 
         if(s) try { this.settings = JSON.parse(s); } catch(e){ console.error(e); }
         
-        // Ensure arrays exist if JSON was partial
         if(!this.data.logs) this.data.logs = [];
         if(!this.data.costs) this.data.costs = [];
     },
@@ -147,7 +135,7 @@ let myChart = null;
 
 const AppActions = {
     init: function() {
-        App.init(); // Load data first
+        App.init(); 
         
         this.bindNav();
         this.bindLog();
@@ -155,16 +143,13 @@ const AppActions = {
         this.bindSettings();
         this.bindCompare();
         
-        // Initial Render
         UILog.renderList(App.data.logs);
         this.renderCostsList();
         
-        // Populate dates
         const today = new Date().toISOString().split('T')[0];
         if(document.getElementById('date')) document.getElementById('date').value = today;
         if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
 
-        // Force Stats Update to fix the "Zero" issue on load
         this.updateStats();
     },
 
@@ -176,19 +161,15 @@ const AppActions = {
             btn.addEventListener('click', () => {
                 tabs.forEach(t => t.classList.remove('active'));
                 sections.forEach(s => s.classList.remove('active'));
-                
                 btn.classList.add('active');
                 const targetId = btn.getAttribute('data-tab');
                 document.getElementById(targetId).classList.add('active');
-
-                if(targetId === 'compare') {
-                    this.updateStats();
-                }
+                if(targetId === 'compare') this.updateStats();
             });
         });
     },
 
-    // --- LOG LOGIC ---
+    // LOG
     bindLog: function() {
         const btnAdd = document.getElementById('addEntry');
         if (btnAdd) {
@@ -216,30 +197,21 @@ const AppActions = {
 
                 UILog.renderList(App.data.logs);
                 this.clearLogForm();
-                this.updateStats(); // Refresh stats in background
+                this.updateStats();
             });
         }
         
-        // Preview listeners
         const updatePreview = () => {
              const kwh = parseFloat(document.getElementById('kwh').value) || 0;
              const price = parseFloat(document.getElementById('price').value) || 0;
              const res = Calc.compare(kwh, price, parseFloat(App.settings.evEff), parseFloat(App.settings.iceMpg), parseFloat(App.settings.fuelPrice));
              UILog.renderPreview(res);
         };
-
-        ['kwh', 'price'].forEach(id => {
-            document.getElementById(id).addEventListener('input', updatePreview);
-        });
-        
+        ['kwh', 'price'].forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
         document.getElementById('type').addEventListener('change', (e) => {
              const opt = e.target.options[e.target.selectedIndex];
-             if(opt.dataset.price) {
-                 document.getElementById('price').value = opt.dataset.price;
-                 updatePreview();
-             }
+             if(opt.dataset.price) { document.getElementById('price').value = opt.dataset.price; updatePreview(); }
         });
-
         document.getElementById('sameAsLast').addEventListener('click', () => {
             if(App.data.logs.length > 0) {
                 const last = App.data.logs[0];
@@ -260,10 +232,8 @@ const AppActions = {
         document.getElementById('type').value = entry.type;
         document.getElementById('note').value = entry.note;
         
-        // Switch to Log tab
         document.querySelector('[data-tab="log"]').click();
         document.getElementById('log').scrollIntoView({behavior: 'smooth'});
-
         editModeId = id;
         const btn = document.getElementById('addEntry');
         btn.innerText = "Update Entry";
@@ -284,12 +254,11 @@ const AppActions = {
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
         editModeId = null;
-        const btn = document.getElementById('addEntry');
-        btn.innerText = "Add Entry";
-        btn.style.backgroundColor = ""; 
+        document.getElementById('addEntry').innerText = "Add Entry";
+        document.getElementById('addEntry').style.backgroundColor = ""; 
     },
 
-    // --- COSTS LOGIC ---
+    // COSTS
     bindCosts: function() {
         const btn = document.getElementById('c_add');
         if(btn) {
@@ -351,7 +320,6 @@ const AppActions = {
         
         document.querySelector('[data-tab="costs"]').click();
         document.getElementById('costs').scrollIntoView({behavior: 'smooth'});
-        
         editCostModeId = id;
         const btn = document.getElementById('c_add');
         btn.innerText = "Update Cost";
@@ -372,17 +340,14 @@ const AppActions = {
         document.getElementById('c_note').value = '';
         document.getElementById('c_target').value = 'ev'; 
         editCostModeId = null;
-        const btn = document.getElementById('c_add');
-        btn.innerText = "Add Cost";
-        btn.style.backgroundColor = "";
+        document.getElementById('c_add').innerText = "Add Cost";
+        document.getElementById('c_add').style.backgroundColor = "";
     },
 
-    // --- STATS & CHART ---
+    // STATS
     updateStats: function() {
-        // Calculate
         const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
 
-        // Update DOM
         const elIds = {
             'stat-miles': stats.totalMiles.toFixed(0),
             'stat-ev-charge': '£' + stats.totalEvChargingCost.toFixed(2),
@@ -390,13 +355,11 @@ const AppActions = {
             'stat-ice-fuel': '£' + stats.totalIceFuelCost.toFixed(2),
             'stat-ice-maint': '£' + stats.totalIceMaint.toFixed(2)
         };
-
         for(const [id, val] of Object.entries(elIds)){
             const el = document.getElementById(id);
             if(el) el.innerText = val;
         }
 
-        // Update Big Card
         const card = document.getElementById('tco-card');
         if(card) {
             const isPositive = stats.netBalance >= 0;
@@ -409,13 +372,72 @@ const AppActions = {
         }
 
         this.renderChart(App.data.logs, App.data.costs, App.settings);
+        this.renderMonthlyStats(App.data.logs, App.data.costs, App.settings);
+    },
+
+    // NEW FUNCTION: MONTHLY TABLE
+    renderMonthlyStats: function(logs, costs, settings) {
+        const container = document.getElementById('monthly-stats-table');
+        if(!container) return;
+
+        // Group data by Month (YYYY-MM)
+        let monthlyData = {};
+
+        logs.forEach(l => {
+            const month = l.date.substring(0, 7); // "2023-10"
+            if(!monthlyData[month]) monthlyData[month] = { ev:0, ice:0, kwh:0 };
+            
+            const cost = (l.total !== undefined) ? parseFloat(l.total) : (l.kwh * l.price);
+            monthlyData[month].ev += cost;
+            monthlyData[month].kwh += parseFloat(l.kwh);
+        });
+
+        costs.forEach(c => {
+            const month = c.date.substring(0, 7);
+            if(!monthlyData[month]) monthlyData[month] = { ev:0, ice:0, kwh:0 };
+            
+            if(c.target === 'ice') monthlyData[month].ice += parseFloat(c.amount);
+            else monthlyData[month].ev += parseFloat(c.amount);
+        });
+
+        // Calculate simulated ICE Fuel per month based on that month's kWh
+        Object.keys(monthlyData).forEach(m => {
+            const miles = monthlyData[m].kwh * settings.evEff;
+            const fuelCost = (miles / settings.iceMpg) * 4.54609 * settings.fuelPrice;
+            monthlyData[m].ice += fuelCost;
+        });
+
+        // Sort by date descending
+        const sortedMonths = Object.keys(monthlyData).sort().reverse();
+
+        // Build Table
+        let html = '<table style="width:100%; border-collapse: collapse; font-size:0.9rem;">';
+        html += '<tr style="border-bottom:1px solid #444; color:#888; text-align:left;"><th>Месец</th><th style="text-align:right">EV</th><th style="text-align:right">ICE</th><th style="text-align:right">Net</th></tr>';
+        
+        sortedMonths.forEach(m => {
+            const d = monthlyData[m];
+            const net = d.ice - d.ev;
+            const color = net >= 0 ? '#4CAF50' : '#f44336';
+            const cleanDate = new Date(m + "-01").toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            
+            html += `<tr style="border-bottom:1px solid #222;">
+                <td style="padding:10px 0; color:#ccc;">${cleanDate}</td>
+                <td style="padding:10px 0; text-align:right; color:#ccc;">£${d.ev.toFixed(0)}</td>
+                <td style="padding:10px 0; text-align:right; color:#ccc;">£${d.ice.toFixed(0)}</td>
+                <td style="padding:10px 0; text-align:right; font-weight:bold; color:${color}">£${net.toFixed(0)}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        
+        if(sortedMonths.length === 0) html = '<p style="color:#666; font-size:0.8rem;">Няма данни за месечен отчет.</p>';
+        container.innerHTML = html;
     },
 
     renderChart: function(logs, costs, settings) {
         const ctx = document.getElementById('tcoChart');
         if(!ctx) return;
-
-        // Prepare Data
+        
+        // Data prep (same as before)
         let allEvents = [];
         logs.forEach(l => {
             const cost = (l.total !== undefined) ? parseFloat(l.total) : (l.kwh * l.price);
@@ -423,26 +445,19 @@ const AppActions = {
             const fuelCost = (miles / settings.iceMpg) * 4.54609 * settings.fuelPrice;
             allEvents.push({ date: l.date, evCost: cost, iceCost: fuelCost });
         });
-
         costs.forEach(c => {
             const amt = parseFloat(c.amount);
             if(c.target === 'ice') allEvents.push({ date: c.date, evCost: 0, iceCost: amt });
             else allEvents.push({ date: c.date, evCost: amt, iceCost: 0 });
         });
-
         allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        let labels = [];
-        let evData = [];
-        let iceData = [];
-        let cumulativeEv = 0;
-        let cumulativeIce = 0;
+        let labels = []; let evData = []; let iceData = [];
+        let cumulativeEv = 0; let cumulativeIce = 0;
 
         allEvents.forEach(e => {
             cumulativeEv += e.evCost;
             cumulativeIce += e.iceCost;
-            
-            // Push point
             labels.push(e.date);
             evData.push(cumulativeEv);
             iceData.push(cumulativeIce);
@@ -455,39 +470,15 @@ const AppActions = {
             data: {
                 labels: labels,
                 datasets: [
-                    {
-                        label: 'ICE (ДВГ) Total',
-                        data: iceData,
-                        borderColor: '#f44336',
-                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                        fill: true,
-                        tension: 0.1,
-                        pointRadius: 2
-                    },
-                    {
-                        label: 'EV (Ток) Total',
-                        data: evData,
-                        borderColor: '#4CAF50',
-                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                        fill: true,
-                        tension: 0.1,
-                        pointRadius: 2
-                    }
+                    { label: 'ICE Total', data: iceData, borderColor: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.1)', fill: true, tension: 0.1, pointRadius: 0 },
+                    { label: 'EV Total', data: evData, borderColor: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)', fill: true, tension: 0.1, pointRadius: 0 }
                 ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { display: false }, // Hide lots of dates for cleaner look
-                    y: { 
-                        ticks: { color: '#888', callback: (v) => '£'+v }, 
-                        grid: { color: '#333' }
-                    }
-                },
-                plugins: {
-                    legend: { labels: { color: '#ccc' } }
-                }
+                responsive: true, maintainAspectRatio: false,
+                scales: { x: { display: false }, y: { ticks: { color: '#888', callback: (v) => '£'+v }, grid: { color: '#333' } } },
+                plugins: { legend: { labels: { color: '#ccc' } } },
+                interaction: { mode: 'index', intersect: false }
             }
         });
     },
@@ -504,7 +495,7 @@ const AppActions = {
                 App.settings.iceMpg = parseFloat(document.getElementById('set_ice_mpg').value);
                 App.settings.fuelPrice = parseFloat(document.getElementById('set_fuel_price').value);
                 App.save();
-                AppActions.updateStats(); // Recalculate immediately
+                AppActions.updateStats();
                 alert('Saved!');
             });
         }
@@ -517,7 +508,6 @@ const AppActions = {
                  a.href = dataStr; a.download = "ev_backup.json"; a.click();
             });
         }
-
         const inpImport = document.getElementById('importBackup');
         if(inpImport) {
             inpImport.addEventListener('change', (e) => {
@@ -525,12 +515,7 @@ const AppActions = {
                 if(!file) return;
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    try {
-                        const imported = JSON.parse(e.target.result);
-                        if(imported.logs) App.data = imported;
-                        App.save();
-                        location.reload();
-                    } catch(err) { alert('Invalid JSON'); }
+                    try { const imported = JSON.parse(e.target.result); if(imported.logs) App.data = imported; App.save(); location.reload(); } catch(err) { alert('Invalid JSON'); }
                 };
                 reader.readAsText(file);
             });
@@ -543,19 +528,15 @@ const AppActions = {
             btn.addEventListener('click', () => {
                 const dist = parseFloat(document.getElementById('cmp-dist').value);
                 if(!dist) return;
-                
-                // Get current price from log input as "reference" price
                 const evPrice = parseFloat(document.getElementById('price').value) || 0.56;
-
                 const costEV = (dist / App.settings.evEff) * evPrice;
                 const costICE = (dist / App.settings.iceMpg) * 4.54609 * App.settings.fuelPrice;
                 const diff = costICE - costEV;
                 const isCheaper = diff > 0;
-
                 const resDiv = document.getElementById('compare-result');
                 resDiv.innerHTML = `
                     <div style="background:#222; border-left: 4px solid ${isCheaper ? '#4CAF50' : '#f44336'}; padding:15px; margin-top:20px; border-radius:4px;">
-                        <h4 style="margin:0 0 10px 0; color:#fff;">За ${dist} мили (Trip)</h4>
+                        <h4 style="margin:0 0 10px 0; color:#fff;">За ${dist} мили</h4>
                         <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:#ccc;">
                             <span>🔋 EV: <strong>£${costEV.toFixed(2)}</strong></span>
                             <span>⛽ ICE: <strong>£${costICE.toFixed(2)}</strong></span>
@@ -569,7 +550,4 @@ const AppActions = {
     }
 };
 
-// --- 5. INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', () => {
-    AppActions.init();
-});
+document.addEventListener('DOMContentLoaded', () => { AppActions.init(); });
