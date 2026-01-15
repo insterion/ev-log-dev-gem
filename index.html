@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EV Log</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#4CAF50" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 
@@ -106,7 +109,6 @@
     </div>
 
     <button id="c_add">Add Cost</button>
-    
     <div id="costTable" style="margin-top:20px;"></div>
   </section>
 
@@ -115,8 +117,7 @@
     <div id="tco-dashboard" style="display:block; margin-bottom:25px;">
         <h3 style="margin-top:0;">📊 Пълна статистика</h3>
         
-        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;">
-             </div>
+        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;"></div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
@@ -141,25 +142,27 @@
             Общ пробег: <span id="stat-miles" style="color:#fff; font-weight:bold;">0</span> mi
         </div>
 
-        <div style="background:#1a1a1a; padding:15px; border-radius:10px;">
-            <h4 style="margin:0 0 15px 0; color:#ccc; font-size:1rem;">📈 Кумулативни разходи с времето</h4>
+        <div style="background:#1a1a1a; padding:15px; border-radius:10px; margin-bottom:20px;">
+            <h4 style="margin:0 0 15px 0; color:#ccc; font-size:1rem;">📈 Кумулативни разходи</h4>
             <div style="position: relative; height:250px; width:100%">
                 <canvas id="tcoChart"></canvas>
             </div>
+        </div>
+
+        <div style="background:#1a1a1a; padding:15px; border-radius:10px;">
+            <h4 style="margin:0 0 10px 0; color:#ccc; font-size:1rem;">📅 Месечна разбивка</h4>
+            <div id="monthly-stats-table"></div>
         </div>
     </div>
 
     <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
 
     <h3>🧮 Калкулатор за пътуване</h3>
-    <p style="color:#aaa; font-size:0.9em;">Симулация за единично пътуване.</p>
-    
     <div class="compare-box" style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; text-align:center;">
         <label>Разстояние (мили)</label>
         <input type="number" id="cmp-dist" placeholder="100" style="text-align:center; font-size:1.2rem; margin-bottom:10px;">
         <button id="btn-calc-trip">Изчисли</button>
     </div>
-
     <div id="compare-result"></div>
   </section>
 
@@ -180,6 +183,16 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered'))
+          .catch(err => console.log('SW failed', err));
+      });
+    }
+  </script>
 
 </body>
 </html>
