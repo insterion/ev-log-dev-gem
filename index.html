@@ -75,6 +75,7 @@
         <option value="ev">🚗 Моята Кола (EV)</option>
         <option value="ice">⛽ ДВГ Алтернатива</option>
       </select>
+      <small style="color:#666; display:block; margin-top:5px;">Избери "ДВГ" за реални разходи по втората кола.</small>
     </div>
 
     <div class="section-block">
@@ -111,33 +112,40 @@
 
   <section id="compare" class="tab">
     
-    <div id="tco-dashboard" style="display:none; margin-bottom:25px;">
+    <div id="tco-dashboard" style="display:block; margin-bottom:25px;">
         <h3 style="margin-top:0;">📊 Пълна статистика</h3>
         
-        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;"></div>
+        <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; background:#222;">
+             </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
                 <div style="font-size:0.8rem; color:#888;">⚡ EV Зареждане</div>
-                <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold;">£0</div>
+                <div id="stat-ev-charge" style="font-size:1.1rem; font-weight:bold;">£0.00</div>
             </div>
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #4CAF50;">
                 <div style="font-size:0.8rem; color:#888;">🚗 EV Поддръжка</div>
-                <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
+                <div id="stat-ev-maint" style="font-size:1.1rem; font-weight:bold;">£0.00</div>
             </div>
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #f44336;">
                 <div style="font-size:0.8rem; color:#888;">⛽ ДВГ Гориво (est)</div>
-                <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold;">£0</div>
+                <div id="stat-ice-fuel" style="font-size:1.1rem; font-weight:bold;">£0.00</div>
             </div>
              <div style="background:#1a1a1a; padding:10px; border-radius:8px; border-left:2px solid #f44336;">
                 <div style="font-size:0.8rem; color:#888;">🔧 ДВГ Поддръжка</div>
-                <div id="stat-ice-maint" style="font-size:1.1rem; font-weight:bold;">£0</div>
+                <div id="stat-ice-maint" style="font-size:1.1rem; font-weight:bold;">£0.00</div>
             </div>
+        </div>
+
+        <div style="text-align:center; margin-bottom:20px; font-size:0.9rem; color:#888;">
+            Общ пробег: <span id="stat-miles" style="color:#fff; font-weight:bold;">0</span> mi
         </div>
 
         <div style="background:#1a1a1a; padding:15px; border-radius:10px;">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:1rem;">📈 Кумулативни разходи с времето</h4>
-            <canvas id="tcoChart" width="400" height="250"></canvas>
+            <div style="position: relative; height:250px; width:100%">
+                <canvas id="tcoChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -171,11 +179,7 @@
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <script src="calc.js"></script>
-  <script src="ui-log.js"></script>
-  <script src="app-core.js"></script>
-  <script src="app-actions.js"></script>
+  <script src="app.js"></script>
 
 </body>
 </html>
