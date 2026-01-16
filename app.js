@@ -1,5 +1,6 @@
 /* =========================================
    APP.JS - Combined Application Logic
+   Updated: Auto-fill price based on Type selection
    ========================================= */
 
 // --- 1. CALCULATOR LOGIC ---
@@ -169,15 +170,47 @@ const AppActions = {
         });
     },
 
-    // LOG
+    // --- LOG LOGIC (UPDATED WITH AUTO-PRICE) ---
     bindLog: function() {
         const btnAdd = document.getElementById('addEntry');
+        const kwhInput = document.getElementById('kwh');
+        const priceInput = document.getElementById('price');
+        const typeSelect = document.getElementById('type');
+        const sameAsLastBtn = document.getElementById('sameAsLast');
+
+        // Helper: Update price from dropdown and refresh preview
+        const syncPriceFromType = () => {
+            const opt = typeSelect.options[typeSelect.selectedIndex];
+            if(opt && opt.dataset.price) {
+                priceInput.value = opt.dataset.price;
+            }
+            updatePreview();
+        };
+
+        const updatePreview = () => {
+             const kwh = parseFloat(kwhInput.value) || 0;
+             const price = parseFloat(priceInput.value) || 0;
+             const res = Calc.compare(kwh, price, parseFloat(App.settings.evEff), parseFloat(App.settings.iceMpg), parseFloat(App.settings.fuelPrice));
+             UILog.renderPreview(res);
+        };
+
+        // Event: When TYPE changes -> Update Price automatically
+        typeSelect.addEventListener('change', syncPriceFromType);
+
+        // Event: When Inputs change -> Just update preview
+        kwhInput.addEventListener('input', updatePreview);
+        priceInput.addEventListener('input', updatePreview);
+
+        // Initialize Price on Load
+        syncPriceFromType();
+
+        // Add Button Logic
         if (btnAdd) {
             btnAdd.addEventListener('click', () => {
                 const date = document.getElementById('date').value;
-                const kwh = parseFloat(document.getElementById('kwh').value);
-                const price = parseFloat(document.getElementById('price').value);
-                const type = document.getElementById('type').value;
+                const kwh = parseFloat(kwhInput.value);
+                const price = parseFloat(priceInput.value);
+                const type = typeSelect.value;
                 const note = document.getElementById('note').value;
 
                 if (!date || isNaN(kwh) || isNaN(price)) return alert('Моля попълнете всички полета');
@@ -201,22 +234,12 @@ const AppActions = {
             });
         }
         
-        const updatePreview = () => {
-             const kwh = parseFloat(document.getElementById('kwh').value) || 0;
-             const price = parseFloat(document.getElementById('price').value) || 0;
-             const res = Calc.compare(kwh, price, parseFloat(App.settings.evEff), parseFloat(App.settings.iceMpg), parseFloat(App.settings.fuelPrice));
-             UILog.renderPreview(res);
-        };
-        ['kwh', 'price'].forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
-        document.getElementById('type').addEventListener('change', (e) => {
-             const opt = e.target.options[e.target.selectedIndex];
-             if(opt.dataset.price) { document.getElementById('price').value = opt.dataset.price; updatePreview(); }
-        });
-        document.getElementById('sameAsLast').addEventListener('click', () => {
+        // "Same as Last" Logic
+        sameAsLastBtn.addEventListener('click', () => {
             if(App.data.logs.length > 0) {
                 const last = App.data.logs[0];
-                document.getElementById('price').value = last.price;
-                document.getElementById('type').value = last.type;
+                priceInput.value = last.price;
+                typeSelect.value = last.type;
                 document.getElementById('note').value = last.note;
                 updatePreview();
             }
@@ -253,6 +276,13 @@ const AppActions = {
         document.getElementById('kwh').value = '';
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
+        
+        // Reset type to first option and auto-set price
+        const typeSelect = document.getElementById('type');
+        typeSelect.selectedIndex = 0;
+        const opt = typeSelect.options[0];
+        if(opt && opt.dataset.price) document.getElementById('price').value = opt.dataset.price;
+
         editModeId = null;
         document.getElementById('addEntry').innerText = "Add Entry";
         document.getElementById('addEntry').style.backgroundColor = ""; 
@@ -375,16 +405,14 @@ const AppActions = {
         this.renderMonthlyStats(App.data.logs, App.data.costs, App.settings);
     },
 
-    // NEW FUNCTION: MONTHLY TABLE
     renderMonthlyStats: function(logs, costs, settings) {
         const container = document.getElementById('monthly-stats-table');
         if(!container) return;
 
-        // Group data by Month (YYYY-MM)
         let monthlyData = {};
 
         logs.forEach(l => {
-            const month = l.date.substring(0, 7); // "2023-10"
+            const month = l.date.substring(0, 7); 
             if(!monthlyData[month]) monthlyData[month] = { ev:0, ice:0, kwh:0 };
             
             const cost = (l.total !== undefined) ? parseFloat(l.total) : (l.kwh * l.price);
@@ -400,17 +428,14 @@ const AppActions = {
             else monthlyData[month].ev += parseFloat(c.amount);
         });
 
-        // Calculate simulated ICE Fuel per month based on that month's kWh
         Object.keys(monthlyData).forEach(m => {
             const miles = monthlyData[m].kwh * settings.evEff;
             const fuelCost = (miles / settings.iceMpg) * 4.54609 * settings.fuelPrice;
             monthlyData[m].ice += fuelCost;
         });
 
-        // Sort by date descending
         const sortedMonths = Object.keys(monthlyData).sort().reverse();
 
-        // Build Table
         let html = '<table style="width:100%; border-collapse: collapse; font-size:0.9rem;">';
         html += '<tr style="border-bottom:1px solid #444; color:#888; text-align:left;"><th>Месец</th><th style="text-align:right">EV</th><th style="text-align:right">ICE</th><th style="text-align:right">Net</th></tr>';
         
@@ -437,7 +462,6 @@ const AppActions = {
         const ctx = document.getElementById('tcoChart');
         if(!ctx) return;
         
-        // Data prep (same as before)
         let allEvents = [];
         logs.forEach(l => {
             const cost = (l.total !== undefined) ? parseFloat(l.total) : (l.kwh * l.price);
