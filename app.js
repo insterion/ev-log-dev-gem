@@ -1,6 +1,6 @@
 /* =========================================
-   APP.JS - Combined Application Logic
-   Updated: Auto-fill price based on Type selection
+   APP.JS - Single File Solution
+   Fixed: File conflicts & Read-only Price field
    ========================================= */
 
 // --- 1. CALCULATOR LOGIC ---
@@ -111,7 +111,13 @@ const UILog = {
     renderPreview: function(calcResult) {
         const div = document.getElementById('log-preview'); 
         if (!div) return;
-        if (!calcResult || calcResult.rangeMiles <= 0) { div.style.display = 'none'; return; }
+        
+        // Hide preview if data is invalid
+        if (!calcResult || isNaN(calcResult.rangeMiles) || calcResult.rangeMiles <= 0) { 
+            div.style.display = 'none'; 
+            return; 
+        }
+        
         const color = calcResult.isCheaper ? '#4CAF50' : '#f44336'; 
         const text = calcResult.isCheaper ? 'СПЕСТЯВАШ' : 'ЗАГУБА';
         div.style.display = 'block';
@@ -144,9 +150,11 @@ const AppActions = {
         this.bindSettings();
         this.bindCompare();
         
+        // Initial Renders
         UILog.renderList(App.data.logs);
         this.renderCostsList();
         
+        // Set Today's Date
         const today = new Date().toISOString().split('T')[0];
         if(document.getElementById('date')) document.getElementById('date').value = today;
         if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
@@ -170,7 +178,7 @@ const AppActions = {
         });
     },
 
-    // --- LOG LOGIC (UPDATED WITH AUTO-PRICE) ---
+    // --- LOG LOGIC ---
     bindLog: function() {
         const btnAdd = document.getElementById('addEntry');
         const kwhInput = document.getElementById('kwh');
@@ -178,39 +186,63 @@ const AppActions = {
         const typeSelect = document.getElementById('type');
         const sameAsLastBtn = document.getElementById('sameAsLast');
 
-        // Helper: Update price from dropdown and refresh preview
+        // Add "Manual" option if not present
+        if(typeSelect && !typeSelect.querySelector('option[value="manual"]')){
+             const opt = document.createElement('option');
+             opt.value = "manual";
+             opt.text = "✏️ Друго / Ръчно";
+             typeSelect.appendChild(opt);
+        }
+
+        // 1. Sync Price based on selection
         const syncPriceFromType = () => {
             const opt = typeSelect.options[typeSelect.selectedIndex];
-            if(opt && opt.dataset.price) {
+            
+            // If option has a data-price attribute
+            if(opt && opt.dataset.price !== undefined) {
                 priceInput.value = opt.dataset.price;
+                priceInput.setAttribute('readonly', true); // Lock the field
+                priceInput.style.backgroundColor = "#333"; // Visual feedback
+                priceInput.style.color = "#888";
+            } else {
+                // Manual mode
+                priceInput.removeAttribute('readonly'); // Unlock
+                priceInput.style.backgroundColor = ""; 
+                priceInput.style.color = "";
             }
             updatePreview();
         };
 
+        // 2. Calculation logic
         const updatePreview = () => {
-             const kwh = parseFloat(kwhInput.value) || 0;
-             const price = parseFloat(priceInput.value) || 0;
+             const kwh = parseFloat(kwhInput.value);
+             const price = parseFloat(priceInput.value);
+             
+             // Check valid numbers
+             if(isNaN(kwh) || isNaN(price)) {
+                 UILog.renderPreview(null);
+                 return;
+             }
+
              const res = Calc.compare(kwh, price, parseFloat(App.settings.evEff), parseFloat(App.settings.iceMpg), parseFloat(App.settings.fuelPrice));
              UILog.renderPreview(res);
         };
 
-        // Event: When TYPE changes -> Update Price automatically
+        // Event Listeners
         typeSelect.addEventListener('change', syncPriceFromType);
-
-        // Event: When Inputs change -> Just update preview
         kwhInput.addEventListener('input', updatePreview);
-        priceInput.addEventListener('input', updatePreview);
+        priceInput.addEventListener('input', updatePreview); // Only active if manual
 
-        // Initialize Price on Load
+        // Init on load
         syncPriceFromType();
 
-        // Add Button Logic
+        // Add Entry Button
         if (btnAdd) {
             btnAdd.addEventListener('click', () => {
                 const date = document.getElementById('date').value;
                 const kwh = parseFloat(kwhInput.value);
                 const price = parseFloat(priceInput.value);
-                const type = typeSelect.value;
+                const type = typeSelect.options[typeSelect.selectedIndex].text; // Use text label
                 const note = document.getElementById('note').value;
 
                 if (!date || isNaN(kwh) || isNaN(price)) return alert('Моля попълнете всички полета');
@@ -238,10 +270,23 @@ const AppActions = {
         sameAsLastBtn.addEventListener('click', () => {
             if(App.data.logs.length > 0) {
                 const last = App.data.logs[0];
-                priceInput.value = last.price;
-                typeSelect.value = last.type;
+                // Try to find the matching option in dropdown
+                let found = false;
+                for(let i=0; i<typeSelect.options.length; i++){
+                    if(typeSelect.options[i].text === last.type) {
+                        typeSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found) {
+                     // Set to manual if previous type isn't in list anymore
+                     typeSelect.value = "manual";
+                     priceInput.value = last.price;
+                }
+                
                 document.getElementById('note').value = last.note;
-                updatePreview();
+                syncPriceFromType(); // This will lock/unlock appropriately
             }
         });
     },
@@ -251,9 +296,26 @@ const AppActions = {
         if(!entry) return;
         document.getElementById('date').value = entry.date;
         document.getElementById('kwh').value = entry.kwh;
-        document.getElementById('price').value = entry.price;
-        document.getElementById('type').value = entry.type;
         document.getElementById('note').value = entry.note;
+        
+        // Handle Type and Price
+        const typeSelect = document.getElementById('type');
+        let found = false;
+        for(let i=0; i<typeSelect.options.length; i++){
+            if(typeSelect.options[i].text === entry.type) {
+                typeSelect.selectedIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if(!found) typeSelect.value = "manual";
+        
+        // Trigger change to set readonly state, then force price value
+        typeSelect.dispatchEvent(new Event('change'));
+        document.getElementById('price').value = entry.price;
+        
+        // Trigger preview update
+        document.getElementById('kwh').dispatchEvent(new Event('input'));
         
         document.querySelector('[data-tab="log"]').click();
         document.getElementById('log').scrollIntoView({behavior: 'smooth'});
@@ -277,18 +339,17 @@ const AppActions = {
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
         
-        // Reset type to first option and auto-set price
+        // Reset type to first
         const typeSelect = document.getElementById('type');
         typeSelect.selectedIndex = 0;
-        const opt = typeSelect.options[0];
-        if(opt && opt.dataset.price) document.getElementById('price').value = opt.dataset.price;
+        typeSelect.dispatchEvent(new Event('change')); // Will reset price and lock it
 
         editModeId = null;
         document.getElementById('addEntry').innerText = "Add Entry";
         document.getElementById('addEntry').style.backgroundColor = ""; 
     },
 
-    // COSTS
+    // --- COSTS LOGIC ---
     bindCosts: function() {
         const btn = document.getElementById('c_add');
         if(btn) {
@@ -374,7 +435,7 @@ const AppActions = {
         document.getElementById('c_add').style.backgroundColor = "";
     },
 
-    // STATS
+    // --- STATS LOGIC ---
     updateStats: function() {
         const stats = Calc.calculateTCO(App.data.logs, App.data.costs, App.settings);
 
