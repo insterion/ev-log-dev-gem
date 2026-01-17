@@ -1,4 +1,4 @@
-/* main.js - "Armored" Version to prevent crashes */
+/* main.js - Compact UI Version */
 
 const App = {
     data: { logs: [], costs: [] },
@@ -6,7 +6,7 @@ const App = {
     
     init: function() {
         console.log("App Starting...");
-        // 1. Load Data safely
+        // 1. Load Data
         try {
             const d = localStorage.getItem('ev_log_data'); 
             if(d) this.data = JSON.parse(d);
@@ -15,7 +15,6 @@ const App = {
             if(s) this.settings = JSON.parse(s);
         } catch(e) {
             console.error("Error loading data", e);
-            // If data is corrupt, reset to defaults to allow app to work
             this.data = { logs: [], costs: [] }; 
         }
         
@@ -72,13 +71,11 @@ const App = {
             const today = new Date().toISOString().split('T')[0];
             const dateEl = document.getElementById('date');
             const cDateEl = document.getElementById('c_date');
-            
             if(dateEl) dateEl.value = today;
             if(cDateEl) cDateEl.value = today;
             
         } catch (err) {
             console.error("UI Init Failed:", err);
-            alert("Възникна грешка при зареждането: " + err.message);
         }
     },
 
@@ -93,7 +90,7 @@ const App = {
                 if(target) {
                     target.classList.add('active');
                     if(btn.dataset.tab === 'compare') this.updateStats();
-                    if(btn.dataset.tab === 'settings') this.loadSettingsToUI(); // Refresh settings view
+                    if(btn.dataset.tab === 'settings') this.loadSettingsToUI();
                 }
             });
         });
@@ -108,7 +105,6 @@ const App = {
         
         if(!btnAdd || !typeSelect || !priceInput) return;
 
-        // Logic: Auto-fill price
         const updatePrice = () => {
             const opt = typeSelect.options[typeSelect.selectedIndex];
             if(opt && opt.dataset.price) {
@@ -119,8 +115,7 @@ const App = {
             } else {
                 priceInput.removeAttribute('readonly');
                 priceInput.style.opacity = "1";
-                priceInput.style.background = "#fff";
-                priceInput.style.color = "#000";
+                priceInput.style.background = "#222";
             }
             this.updatePreview();
         };
@@ -129,7 +124,6 @@ const App = {
         kwhInput.addEventListener('input', () => this.updatePreview());
         priceInput.addEventListener('input', () => this.updatePreview());
         
-        // Run once on load
         updatePrice();
 
         btnAdd.addEventListener('click', () => {
@@ -144,11 +138,10 @@ const App = {
             this.addLog({ date, kwh, price, type, note, total: kwh * price });
             this.renderLogList();
             
-            // Clear inputs
             kwhInput.value = '';
             document.getElementById('note').value = '';
             document.getElementById('log-preview').style.display = 'none';
-            this.updateStats(); // Update stats immediately
+            this.updateStats();
         });
     },
 
@@ -159,7 +152,6 @@ const App = {
         
         if(kwh <= 0 || price <= 0) { div.style.display = 'none'; return; }
 
-        // Calc
         const range = kwh * this.settings.evEff;
         const costEV = kwh * price;
         const costICE = (range / this.settings.iceMpg) * 4.54609 * this.settings.fuelPrice;
@@ -179,6 +171,7 @@ const App = {
             </div>`;
     },
 
+    // --- COMPACT RENDER LOGIC ---
     renderLogList: function() {
         const div = document.getElementById('logTable');
         if(!div) return;
@@ -186,23 +179,30 @@ const App = {
         let html = '';
         this.data.logs.forEach(l => {
             const cost = l.total || (l.kwh * l.price);
-            html += `<div class="log-entry">
-                <div style="flex:1">
-                    <div style="font-weight:bold; font-size:1.1em">${l.kwh} kWh <span style="color:#aaa">• £${cost.toFixed(2)}</span></div>
-                    <div style="font-size:0.85em; color:#888">${l.date} • ${l.type}</div>
-                    <div style="font-size:0.85em; color:#666">${l.note || ''}</div>
+            html += `
+            <div class="log-entry">
+                <div class="log-info">
+                    <div class="log-main-row">
+                        <span>${l.kwh} kWh</span>
+                        <span class="cost-tag">£${cost.toFixed(2)}</span>
+                    </div>
+                    <div class="log-sub-row">
+                        <span>${l.date}</span>
+                        <span>•</span>
+                        <span>${l.type}</span>
+                    </div>
+                    ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
                 </div>
-                <button onclick="App.confirmDeleteLog(${l.id})" style="background:none; border:none; color:red; font-size:1.2em; padding:10px;">✕</button>
+                <button class="delete-btn" onclick="App.confirmDeleteLog(${l.id})">×</button>
             </div>`;
         });
-        div.innerHTML = html || '<p style="text-align:center; color:#666">Няма записи</p>';
+        div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
     },
     
     confirmDeleteLog: function(id) {
         if(confirm('Изтриване?')) { this.deleteLog(id); this.renderLogList(); this.updateStats(); }
     },
 
-    // --- COSTS ---
     bindCostsForm: function() {
         const btn = document.getElementById('c_add');
         if(!btn) return;
@@ -225,6 +225,7 @@ const App = {
         });
     },
 
+    // --- COMPACT RENDER COSTS ---
     renderCostsList: function() {
         const div = document.getElementById('costTable');
         if(!div) return;
@@ -232,17 +233,24 @@ const App = {
         let html = '';
         this.data.costs.forEach(c => {
             const isIce = c.target === 'ice';
-            const border = isIce ? 'border-left:3px solid #f44336' : 'border-left:3px solid #4CAF50';
-            html += `<div class="log-entry" style="${border}">
-                <div style="flex:1">
-                    <div style="font-weight:bold">£${parseFloat(c.amount).toFixed(2)}</div>
-                    <div style="font-size:0.85em; color:#888">${c.date} • ${isIce?'⛽ ICE':'🚗 EV'} • ${c.cat}</div>
-                    <div style="font-size:0.85em; color:#666">${c.note || ''}</div>
+            const icon = isIce ? '⛽' : '⚡';
+            
+            html += `
+            <div class="log-entry" style="border-left: 3px solid ${isIce ? '#f44336' : '#4CAF50'}; padding-left:10px;">
+                <div class="log-info">
+                    <div class="log-main-row">
+                        <span>£${parseFloat(c.amount).toFixed(2)}</span>
+                        <span style="font-size:0.8em; font-weight:normal; color:#aaa;">${icon} ${c.cat}</span>
+                    </div>
+                    <div class="log-sub-row">
+                        <span>${c.date}</span>
+                    </div>
+                    ${c.note ? `<div class="log-note">${c.note}</div>` : ''}
                 </div>
-                <button onclick="App.confirmDeleteCost(${c.id})" style="background:none; border:none; color:red; font-size:1.2em; padding:10px;">✕</button>
+                <button class="delete-btn" onclick="App.confirmDeleteCost(${c.id})">×</button>
             </div>`;
         });
-        div.innerHTML = html || '<p style="text-align:center; color:#666">Няма разходи</p>';
+        div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма разходи</p>';
     },
     
     confirmDeleteCost: function(id) {
@@ -296,11 +304,8 @@ const App = {
                 `;
             }
             
-            // Render Chart only if Chart.js is loaded
             if (typeof Chart !== 'undefined') {
                 this.renderChart(this.data.logs, this.data.costs);
-            } else {
-                console.warn('Chart.js not loaded');
             }
         } catch(e) {
             console.error("Stats error", e);
@@ -407,7 +412,6 @@ const App = {
     }
 };
 
-// Зареждане на скрипта само когато всичко е готово
 window.onload = function() {
     App.init();
 };
