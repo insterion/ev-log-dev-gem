@@ -1,53 +1,171 @@
+/* =========================================
+   STYLES.CSS - Final Compact Version
+   ========================================= */
+
+:root {
+  --primary: #4CAF50;
+  --bg: #000000;
+  --card-bg: #1a1a1a;
+  --text: #ffffff;
+  --text-dim: #888888;
+  --danger: #f44336;
+}
+
 body {
-    background-color: #000;
-    color: #fff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    max-width: 600px;
-    margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0 15px 30px 15px; /* Added bottom padding */
+  -webkit-tap-highlight-color: transparent;
 }
-header { text-align: center; margin-bottom: 20px; }
-h1 { margin: 0; color: #fff; }
-h2 { margin: 5px 0 0; font-size: 1rem; color: #888; font-weight: normal; }
 
-nav { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom:5px; }
+/* HEADER */
+header {
+  text-align: center;
+  padding: 20px 0;
+  border-bottom: 1px solid #333;
+}
+
+h1 { margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
+h2 { margin: 5px 0 0 0; font-size: 0.9rem; color: var(--text-dim); font-weight: normal; }
+
+/* NAV */
+nav {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
 .tabbtn {
-    background: #222; color: #ccc; border: 1px solid #444;
-    padding: 10px 15px; border-radius: 20px; cursor: pointer; flex: 1; white-space: nowrap;
+  background: #222;
+  border: 1px solid #444;
+  color: #ccc;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
 }
-.tabbtn.active { background: #4CAF50; color: #fff; border-color: #4CAF50; }
 
-.tab { display: none; }
-.tab.active { display: block; animation: fadeIn 0.3s; }
+.tabbtn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  font-weight: bold;
+}
+
+/* SECTIONS */
+.tab { display: none; animation: fadeIn 0.3s; }
+.tab.active { display: block; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .section-block { margin-bottom: 15px; }
-label { display: block; color: #aaa; margin-bottom: 5px; font-size: 0.9em; }
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* INPUTS */
 input, select {
-    width: 100%; padding: 12px; background: #111; border: 1px solid #333;
-    border-radius: 8px; color: #fff; font-size: 1rem; box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  box-sizing: border-box; /* Fix width issues */
 }
-input:focus, select:focus { border-color: #4CAF50; outline: none; }
-button {
-    width: 100%; padding: 14px; background: #4CAF50; color: #fff; border: none;
-    border-radius: 8px; font-size: 1rem; cursor: pointer; margin-top: 10px; font-weight: bold;
-}
-button:active { opacity: 0.9; }
 
-/* Logs & List */
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* BUTTONS */
+button#addEntry, button#c_add, button#saveCompareSettings, button#btn-calc-trip {
+  width: 100%;
+  padding: 14px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+button:active { transform: scale(0.98); }
+
+/* --- COMPACT LIST STYLES (NEW) --- */
 .log-entry {
-    background: #111; border: 1px solid #333; padding: 12px;
-    border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-bg);
+    border-bottom: 1px solid #333;
+    padding: 12px 5px;
 }
-.log-info { flex: 1; }
-.log-main { display: flex; align-items: baseline; gap: 10px; }
-.log-kwh { font-size: 1.1em; font-weight: bold; color: #fff; }
-.log-cost { color: #aaa; }
-.log-sub { font-size: 0.85em; color: #666; margin-top: 2px; }
-.log-note { font-size: 0.85em; color: #888; margin-top: 2px; font-style: italic; }
-.log-actions { display: flex; gap: 5px; margin-left: 10px; }
-.btn-icon { width: 30px; height: 30px; padding: 0; font-size: 1.2rem; background: transparent; }
-.edit { color: #ff9800; }
-.delete { color: #f44336; }
 
-@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.log-entry:last-child { border-bottom: none; }
+
+.log-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.log-main-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #fff;
+}
+
+.log-sub-row {
+    font-size: 0.85em;
+    color: var(--text-dim);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.log-note {
+    font-size: 0.85em;
+    color: #999;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 1.5em;
+    padding: 0 15px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* COST TAGS */
+.cost-tag {
+    color: var(--primary);
+    background: rgba(76, 175, 80, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* COMPARE BOXES */
+.compare-box { margin-top: 20px; }
