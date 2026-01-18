@@ -1,5 +1,5 @@
 /* =========================================
-   STYLES.CSS - Final Compact Version + Garage
+   STYLES.CSS - Dual Garage Version
    ========================================= */
 
 :root {
@@ -75,7 +75,7 @@ label {
 }
 
 /* INPUTS */
-input, select {
+input, select, textarea {
   width: 100%;
   padding: 12px;
   background: #222;
@@ -86,7 +86,7 @@ input, select {
   box-sizing: border-box; 
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--primary);
 }
@@ -169,7 +169,30 @@ button:active { transform: scale(0.98); }
     font-size: 0.9em;
 }
 
-/* --- GARAGE STYLES (NEW) --- */
+/* --- GARAGE STYLES --- */
+.garage-switcher {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.g-switch-btn {
+    flex: 1;
+    padding: 10px;
+    background: #222;
+    border: 1px solid #444;
+    color: #888;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.g-switch-btn.active {
+    background: #333;
+    color: #fff;
+    border-color: #666;
+}
+
 .reminder-row {
     display: flex;
     justify-content: space-between;
@@ -184,7 +207,7 @@ button:active { transform: scale(0.98); }
 }
 
 .garage-date {
-    width: 110px; /* Shorter width for dates */
+    width: 110px; 
     padding: 8px;
     font-size: 0.9rem;
 }
