@@ -1,12 +1,12 @@
-/* main.js - Compact UI Version */
+/* main.js - Variant 3: Garage & Reminders */
 
 const App = {
-    data: { logs: [], costs: [] },
+    // Добавяме 'garage' към структурата на данните
+    data: { logs: [], costs: [], garage: {} },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
     
     init: function() {
         console.log("App Starting...");
-        // 1. Load Data
         try {
             const d = localStorage.getItem('ev_log_data'); 
             if(d) this.data = JSON.parse(d);
@@ -15,14 +15,14 @@ const App = {
             if(s) this.settings = JSON.parse(s);
         } catch(e) {
             console.error("Error loading data", e);
-            this.data = { logs: [], costs: [] }; 
+            this.data = { logs: [], costs: [], garage: {} }; 
         }
         
-        // Ensure arrays exist
+        // Ensure structure exists
         if(!this.data.logs) this.data.logs = [];
         if(!this.data.costs) this.data.costs = [];
+        if(!this.data.garage) this.data.garage = {};
         
-        // 2. Start UI
         this.initUI();
     },
 
@@ -59,6 +59,7 @@ const App = {
             this.bindNav();
             this.bindLogForm();
             this.bindCostsForm();
+            this.bindGarage(); // New
             this.bindSettings();
             this.bindCompare();
             
@@ -66,8 +67,8 @@ const App = {
             this.renderLogList();
             this.renderCostsList();
             this.updateStats();
+            this.loadGarageData(); // New
 
-            // Set Today's Date
             const today = new Date().toISOString().split('T')[0];
             const dateEl = document.getElementById('date');
             const cDateEl = document.getElementById('c_date');
@@ -91,6 +92,7 @@ const App = {
                     target.classList.add('active');
                     if(btn.dataset.tab === 'compare') this.updateStats();
                     if(btn.dataset.tab === 'settings') this.loadSettingsToUI();
+                    if(btn.dataset.tab === 'garage') this.loadGarageData();
                 }
             });
         });
@@ -103,7 +105,7 @@ const App = {
         const priceInput = document.getElementById('price');
         const kwhInput = document.getElementById('kwh');
         
-        if(!btnAdd || !typeSelect || !priceInput) return;
+        if(!btnAdd) return;
 
         const updatePrice = () => {
             const opt = typeSelect.options[typeSelect.selectedIndex];
@@ -171,7 +173,6 @@ const App = {
             </div>`;
     },
 
-    // --- COMPACT RENDER LOGIC ---
     renderLogList: function() {
         const div = document.getElementById('logTable');
         if(!div) return;
@@ -225,7 +226,6 @@ const App = {
         });
     },
 
-    // --- COMPACT RENDER COSTS ---
     renderCostsList: function() {
         const div = document.getElementById('costTable');
         if(!div) return;
@@ -255,6 +255,81 @@ const App = {
     
     confirmDeleteCost: function(id) {
         if(confirm('Изтриване?')) { this.deleteCost(id); this.renderCostsList(); this.updateStats(); }
+    },
+
+    // --- GARAGE LOGIC (NEW) ---
+    bindGarage: function() {
+        // IDs of all garage inputs
+        const ids = ['g_insurance', 'g_mot', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
+        
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                // Save automatically when changed
+                el.addEventListener('change', () => {
+                    this.data.garage[id] = el.value;
+                    this.save();
+                    this.updateGarageStatus(); // Recalculate dates
+                });
+            }
+        });
+    },
+
+    loadGarageData: function() {
+        if(!this.data.garage) return;
+        const g = this.data.garage;
+        
+        const setVal = (id) => {
+            if(document.getElementById(id) && g[id]) {
+                document.getElementById(id).value = g[id];
+            }
+        };
+        
+        ['g_insurance', 'g_mot', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'].forEach(setVal);
+        
+        this.updateGarageStatus();
+    },
+
+    updateGarageStatus: function() {
+        // Calculate remaining days for dates
+        const checkDate = (id, statusId) => {
+            const val = document.getElementById(id).value;
+            const el = document.getElementById(statusId);
+            if(!el) return;
+            
+            if(!val) {
+                el.innerText = "--";
+                el.className = "status-badge";
+                return;
+            }
+
+            const target = new Date(val);
+            const today = new Date();
+            // Reset time for accurate day calc
+            today.setHours(0,0,0,0);
+            target.setHours(0,0,0,0);
+
+            const diffTime = target - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+            if(diffDays < 0) {
+                el.innerText = `ИЗТЕКЛО! (${Math.abs(diffDays)} дни)`;
+                el.className = "status-badge status-danger";
+            } else if (diffDays === 0) {
+                el.innerText = "ДНЕС!";
+                el.className = "status-badge status-danger";
+            } else if (diffDays <= 30) {
+                el.innerText = `${diffDays} дни`;
+                el.className = "status-badge status-warning";
+            } else {
+                el.innerText = `${diffDays} дни`;
+                el.className = "status-badge status-ok";
+            }
+        };
+
+        checkDate('g_insurance', 'status_insurance');
+        checkDate('g_mot', 'status_mot');
+        checkDate('g_service', 'status_service');
     },
 
     // --- STATS ---
