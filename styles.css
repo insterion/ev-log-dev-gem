@@ -1,5 +1,5 @@
 /* =========================================
-   STYLES.CSS - Final Compact Version
+   STYLES.CSS - Final Compact Version + Garage
    ========================================= */
 
 :root {
@@ -9,6 +9,8 @@
   --text: #ffffff;
   --text-dim: #888888;
   --danger: #f44336;
+  --warning: #ff9800;
+  --ok: #4CAF50;
 }
 
 body {
@@ -16,7 +18,7 @@ body {
   background-color: var(--bg);
   color: var(--text);
   margin: 0;
-  padding: 0 15px 30px 15px; /* Added bottom padding */
+  padding: 0 15px 30px 15px; 
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -81,7 +83,7 @@ input, select {
   border-radius: 8px;
   color: #fff;
   font-size: 1rem;
-  box-sizing: border-box; /* Fix width issues */
+  box-sizing: border-box; 
 }
 
 input:focus, select:focus {
@@ -105,7 +107,7 @@ button#addEntry, button#c_add, button#saveCompareSettings, button#btn-calc-trip 
 
 button:active { transform: scale(0.98); }
 
-/* --- COMPACT LIST STYLES (NEW) --- */
+/* --- COMPACT LIST STYLES --- */
 .log-entry {
     display: flex;
     justify-content: space-between;
@@ -166,6 +168,41 @@ button:active { transform: scale(0.98); }
     border-radius: 4px;
     font-size: 0.9em;
 }
+
+/* --- GARAGE STYLES (NEW) --- */
+.reminder-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 10px;
+}
+
+.reminder-row label {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.garage-date {
+    width: 110px; /* Shorter width for dates */
+    padding: 8px;
+    font-size: 0.9rem;
+}
+
+.status-badge {
+    min-width: 80px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #888;
+    background: #333;
+}
+
+.status-ok { background: rgba(76, 175, 80, 0.2); color: var(--ok); }
+.status-warning { background: rgba(255, 152, 0, 0.2); color: var(--warning); }
+.status-danger { background: rgba(244, 67, 54, 0.2); color: var(--danger); }
 
 /* COMPARE BOXES */
 .compare-box { margin-top: 20px; }
