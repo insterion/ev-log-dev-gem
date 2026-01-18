@@ -18,6 +18,7 @@
   <nav>
     <button class="tabbtn active" data-tab="log">Log</button>
     <button class="tabbtn" data-tab="costs">Costs</button>
+    <button class="tabbtn" data-tab="garage">Garage</button>
     <button class="tabbtn" data-tab="compare">Compare</button>
     <button class="tabbtn" data-tab="settings">Settings</button>
   </nav>
@@ -90,6 +91,62 @@
     <div id="costTable" style="margin-top:20px;"></div>
   </section>
 
+  <section id="garage" class="tab">
+    
+    <div style="background:#1a1a1a; padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #333;">
+        <h3 style="margin-top:0; color:#ccc;">🔔 Напомняния</h3>
+        
+        <div class="reminder-row">
+            <label>Insurance (Застраховка)</label>
+            <input type="date" id="g_insurance" class="garage-date">
+            <div id="status_insurance" class="status-badge">--</div>
+        </div>
+
+        <div class="reminder-row">
+            <label>MOT / Tax (Преглед)</label>
+            <input type="date" id="g_mot" class="garage-date">
+            <div id="status_mot" class="status-badge">--</div>
+        </div>
+
+        <div class="reminder-row">
+            <label>Service (Обслужване)</label>
+            <input type="date" id="g_service" class="garage-date">
+            <div id="status_service" class="status-badge">--</div>
+        </div>
+    </div>
+
+    <div style="background:#1a1a1a; padding:15px; border-radius:10px; border:1px solid #333;">
+        <h3 style="margin-top:0; color:#ccc;">📄 Данни за колата</h3>
+        
+        <div class="section-block">
+            <label>Registration Plate</label>
+            <input type="text" id="g_plate" placeholder="XX00 XXX">
+        </div>
+        
+        <div class="section-block">
+            <label>VIN Number</label>
+            <input type="text" id="g_vin" placeholder="..." style="font-family:monospace; letter-spacing:1px;">
+        </div>
+
+        <div class="section-block">
+            <label>Tyre Size (Front)</label>
+            <input type="text" id="g_tyre_f" placeholder="e.g. 235/45 R18">
+        </div>
+
+        <div class="section-block">
+            <label>Tyre Size (Rear)</label>
+            <input type="text" id="g_tyre_r" placeholder="e.g. 255/40 R18">
+        </div>
+        
+        <div class="section-block">
+            <label>Notes (Oil type, Paint code...)</label>
+            <textarea id="g_notes" rows="3" style="width:100%; background:#222; color:#fff; border:1px solid #444; border-radius:8px; padding:10px;"></textarea>
+        </div>
+    </div>
+    
+    <p style="text-align:center; color:#666; font-size:0.8rem; margin-top:10px;">Данните се запазват автоматично.</p>
+  </section>
+
   <section id="compare" class="tab">
     <div id="tco-dashboard" style="display:none; margin-bottom:20px;">
         <h3>📊 Статистика</h3>
@@ -140,15 +197,15 @@
     </div>
   </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="main.js"></script> <script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="main.js"></script>
+  <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('SW registered'))
-          .catch(err => console.log('SW failed', err));
+        navigator.serviceWorker.register('./sw.js').then(() => console.log('SW OK'));
       });
     }
   </script>
+
 </body>
 </html>
