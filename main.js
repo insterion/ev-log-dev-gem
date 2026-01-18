@@ -1,27 +1,35 @@
-/* main.js - Variant 3: Garage & Reminders */
+/* main.js - Dual Garage Version */
 
 const App = {
-    // Добавяме 'garage' към структурата на данните
-    data: { logs: [], costs: [], garage: {} },
+    data: { logs: [], costs: [], garage: { ev: {}, ice: {} } },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
+    currentGarageTab: 'ev', // 'ev' or 'ice'
     
     init: function() {
         console.log("App Starting...");
         try {
             const d = localStorage.getItem('ev_log_data'); 
-            if(d) this.data = JSON.parse(d);
+            if(d) {
+                const parsed = JSON.parse(d);
+                this.data.logs = parsed.logs || [];
+                this.data.costs = parsed.costs || [];
+                
+                // MIGRATION LOGIC (Old flat garage -> New Dual Structure)
+                if(parsed.garage && !parsed.garage.ev) {
+                    // Old data found, move it to 'ev'
+                    this.data.garage = { ev: parsed.garage, ice: {} };
+                } else {
+                    this.data.garage = parsed.garage || { ev: {}, ice: {} };
+                }
+            }
             
             const s = localStorage.getItem('ev_log_settings'); 
             if(s) this.settings = JSON.parse(s);
         } catch(e) {
             console.error("Error loading data", e);
-            this.data = { logs: [], costs: [], garage: {} }; 
+            // Default safe state
+            this.data = { logs: [], costs: [], garage: { ev: {}, ice: {} } }; 
         }
-        
-        // Ensure structure exists
-        if(!this.data.logs) this.data.logs = [];
-        if(!this.data.costs) this.data.costs = [];
-        if(!this.data.garage) this.data.garage = {};
         
         this.initUI();
     },
@@ -59,7 +67,7 @@ const App = {
             this.bindNav();
             this.bindLogForm();
             this.bindCostsForm();
-            this.bindGarage(); // New
+            this.bindGarage(); 
             this.bindSettings();
             this.bindCompare();
             
@@ -67,7 +75,7 @@ const App = {
             this.renderLogList();
             this.renderCostsList();
             this.updateStats();
-            this.loadGarageData(); // New
+            this.loadGarageData(); 
 
             const today = new Date().toISOString().split('T')[0];
             const dateEl = document.getElementById('date');
@@ -257,7 +265,24 @@ const App = {
         if(confirm('Изтриване?')) { this.deleteCost(id); this.renderCostsList(); this.updateStats(); }
     },
 
-    // --- GARAGE LOGIC (NEW) ---
+    // --- GARAGE LOGIC (UPDATED FOR DUAL CARS) ---
+    switchGarage: function(type) {
+        this.currentGarageTab = type;
+        
+        // Update Buttons Visuals
+        const btns = document.querySelectorAll('.g-switch-btn');
+        btns.forEach(b => b.classList.remove('active'));
+        // Find the button clicked (simple heuristic or use event)
+        // Re-render UI
+        const activeBtnIndex = type === 'ev' ? 0 : 1;
+        btns[activeBtnIndex].classList.add('active');
+        
+        // Update Title
+        document.getElementById('garage-title').innerText = type === 'ev' ? '🔔 Напомняния (EV)' : '🔔 Напомняния (ICE)';
+        
+        this.loadGarageData();
+    },
+
     bindGarage: function() {
         // IDs of all garage inputs
         const ids = ['g_insurance', 'g_mot', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
@@ -265,23 +290,31 @@ const App = {
         ids.forEach(id => {
             const el = document.getElementById(id);
             if(el) {
-                // Save automatically when changed
                 el.addEventListener('change', () => {
-                    this.data.garage[id] = el.value;
+                    // Save to the CURRENT active vehicle
+                    if(!this.data.garage[this.currentGarageTab]) {
+                        this.data.garage[this.currentGarageTab] = {};
+                    }
+                    this.data.garage[this.currentGarageTab][id] = el.value;
                     this.save();
-                    this.updateGarageStatus(); // Recalculate dates
+                    this.updateGarageStatus(); 
                 });
             }
         });
     },
 
     loadGarageData: function() {
-        if(!this.data.garage) return;
-        const g = this.data.garage;
+        // Ensure sub-object exists
+        if(!this.data.garage[this.currentGarageTab]) {
+            this.data.garage[this.currentGarageTab] = {};
+        }
+        
+        const currentData = this.data.garage[this.currentGarageTab];
         
         const setVal = (id) => {
-            if(document.getElementById(id) && g[id]) {
-                document.getElementById(id).value = g[id];
+            const el = document.getElementById(id);
+            if(el) {
+                el.value = currentData[id] || ""; // Load value or empty
             }
         };
         
@@ -291,7 +324,6 @@ const App = {
     },
 
     updateGarageStatus: function() {
-        // Calculate remaining days for dates
         const checkDate = (id, statusId) => {
             const val = document.getElementById(id).value;
             const el = document.getElementById(statusId);
@@ -305,7 +337,6 @@ const App = {
 
             const target = new Date(val);
             const today = new Date();
-            // Reset time for accurate day calc
             today.setHours(0,0,0,0);
             target.setHours(0,0,0,0);
 
