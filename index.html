@@ -93,33 +93,38 @@
 
   <section id="garage" class="tab">
     
+    <div class="garage-switcher">
+        <button class="g-switch-btn active" onclick="App.switchGarage('ev')">🚗 EV Car</button>
+        <button class="g-switch-btn" onclick="App.switchGarage('ice')">⛽ ICE Car</button>
+    </div>
+
     <div style="background:#1a1a1a; padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #333;">
-        <h3 style="margin-top:0; color:#ccc;">🔔 Напомняния</h3>
+        <h3 id="garage-title" style="margin-top:0; color:#ccc;">🔔 Напомняния (EV)</h3>
         
         <div class="reminder-row">
-            <label>Insurance (Застраховка)</label>
+            <label>Insurance</label>
             <input type="date" id="g_insurance" class="garage-date">
             <div id="status_insurance" class="status-badge">--</div>
         </div>
 
         <div class="reminder-row">
-            <label>MOT / Tax (Преглед)</label>
+            <label>MOT / Tax</label>
             <input type="date" id="g_mot" class="garage-date">
             <div id="status_mot" class="status-badge">--</div>
         </div>
 
         <div class="reminder-row">
-            <label>Service (Обслужване)</label>
+            <label>Service</label>
             <input type="date" id="g_service" class="garage-date">
             <div id="status_service" class="status-badge">--</div>
         </div>
     </div>
 
     <div style="background:#1a1a1a; padding:15px; border-radius:10px; border:1px solid #333;">
-        <h3 style="margin-top:0; color:#ccc;">📄 Данни за колата</h3>
+        <h3 style="margin-top:0; color:#ccc;">📄 Технически данни</h3>
         
         <div class="section-block">
-            <label>Registration Plate</label>
+            <label>Reg. Plate</label>
             <input type="text" id="g_plate" placeholder="XX00 XXX">
         </div>
         
@@ -139,12 +144,10 @@
         </div>
         
         <div class="section-block">
-            <label>Notes (Oil type, Paint code...)</label>
+            <label>Notes</label>
             <textarea id="g_notes" rows="3" style="width:100%; background:#222; color:#fff; border:1px solid #444; border-radius:8px; padding:10px;"></textarea>
         </div>
     </div>
-    
-    <p style="text-align:center; color:#666; font-size:0.8rem; margin-top:10px;">Данните се запазват автоматично.</p>
   </section>
 
   <section id="compare" class="tab">
