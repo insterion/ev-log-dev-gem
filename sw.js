@@ -1,27 +1,42 @@
-/* sw.js - Service Worker v2 */
-const CACHE_NAME = 'ev-log-v2'; // <-- Сменихме името на v2
-const urlsToCache = [
+const CACHE_NAME = 'ev-log-v2-dual';
+const ASSETS = [
   './',
   './index.html',
   './styles.css',
-  './app.js',
+  './main.js',
   './manifest.json',
   'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+// Инсталиране на Service Worker-а и кеширане
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    })
+  );
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(caches.match(event.request).then(response => response || fetch(event.request)));
+// Активиране и почистване на стари версии
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
 });
 
-// Изтриване на стария кеш (v1)
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.map(key => { if(key !== CACHE_NAME) return caches.delete(key); })
-    ))
+// Слушане за заявки (работи офлайн)
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    caches.match(e.request).then((response) => {
+      return response || fetch(e.request);
+    })
   );
 });
