@@ -1,9 +1,9 @@
-/* main.js - Dual Garage Version */
+/* main.js - Sorted Logs + Separated MOT/Tax */
 
 const App = {
     data: { logs: [], costs: [], garage: { ev: {}, ice: {} } },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
-    currentGarageTab: 'ev', // 'ev' or 'ice'
+    currentGarageTab: 'ev', 
     
     init: function() {
         console.log("App Starting...");
@@ -14,9 +14,8 @@ const App = {
                 this.data.logs = parsed.logs || [];
                 this.data.costs = parsed.costs || [];
                 
-                // MIGRATION LOGIC (Old flat garage -> New Dual Structure)
+                // Migration Logic
                 if(parsed.garage && !parsed.garage.ev) {
-                    // Old data found, move it to 'ev'
                     this.data.garage = { ev: parsed.garage, ice: {} };
                 } else {
                     this.data.garage = parsed.garage || { ev: {}, ice: {} };
@@ -27,9 +26,11 @@ const App = {
             if(s) this.settings = JSON.parse(s);
         } catch(e) {
             console.error("Error loading data", e);
-            // Default safe state
             this.data = { logs: [], costs: [], garage: { ev: {}, ice: {} } }; 
         }
+        
+        // Initial Sort (in case old data is unsorted)
+        this.sortData();
         
         this.initUI();
     },
@@ -39,9 +40,17 @@ const App = {
         localStorage.setItem('ev_log_settings', JSON.stringify(this.settings));
     },
 
+    // Helper to sort by date (Newest First)
+    sortData: function() {
+        const sorter = (a, b) => new Date(b.date) - new Date(a.date);
+        this.data.logs.sort(sorter);
+        this.data.costs.sort(sorter);
+    },
+
     addLog: function(entry) { 
         entry.id = Date.now(); 
-        this.data.logs.unshift(entry); 
+        this.data.logs.push(entry); // Add to end
+        this.sortData(); // Then sort
         this.save(); 
     },
     
@@ -52,7 +61,8 @@ const App = {
     
     addCost: function(entry) { 
         entry.id = Date.now(); 
-        this.data.costs.unshift(entry); 
+        this.data.costs.push(entry); 
+        this.sortData();
         this.save(); 
     },
     
@@ -71,7 +81,6 @@ const App = {
             this.bindSettings();
             this.bindCompare();
             
-            // Initial Render
             this.renderLogList();
             this.renderCostsList();
             this.updateStats();
@@ -265,33 +274,29 @@ const App = {
         if(confirm('Изтриване?')) { this.deleteCost(id); this.renderCostsList(); this.updateStats(); }
     },
 
-    // --- GARAGE LOGIC (UPDATED FOR DUAL CARS) ---
+    // --- GARAGE LOGIC ---
     switchGarage: function(type) {
         this.currentGarageTab = type;
         
-        // Update Buttons Visuals
         const btns = document.querySelectorAll('.g-switch-btn');
         btns.forEach(b => b.classList.remove('active'));
-        // Find the button clicked (simple heuristic or use event)
-        // Re-render UI
+        
         const activeBtnIndex = type === 'ev' ? 0 : 1;
         btns[activeBtnIndex].classList.add('active');
         
-        // Update Title
         document.getElementById('garage-title').innerText = type === 'ev' ? '🔔 Напомняния (EV)' : '🔔 Напомняния (ICE)';
         
         this.loadGarageData();
     },
 
     bindGarage: function() {
-        // IDs of all garage inputs
-        const ids = ['g_insurance', 'g_mot', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
+        // Updated List of IDs (Added g_tax)
+        const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
         
         ids.forEach(id => {
             const el = document.getElementById(id);
             if(el) {
                 el.addEventListener('change', () => {
-                    // Save to the CURRENT active vehicle
                     if(!this.data.garage[this.currentGarageTab]) {
                         this.data.garage[this.currentGarageTab] = {};
                     }
@@ -304,21 +309,19 @@ const App = {
     },
 
     loadGarageData: function() {
-        // Ensure sub-object exists
         if(!this.data.garage[this.currentGarageTab]) {
             this.data.garage[this.currentGarageTab] = {};
         }
         
         const currentData = this.data.garage[this.currentGarageTab];
         
-        const setVal = (id) => {
-            const el = document.getElementById(id);
-            if(el) {
-                el.value = currentData[id] || ""; // Load value or empty
-            }
-        };
+        // Updated List (Added g_tax)
+        const fields = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
         
-        ['g_insurance', 'g_mot', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'].forEach(setVal);
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.value = currentData[id] || ""; 
+        });
         
         this.updateGarageStatus();
     },
@@ -360,6 +363,7 @@ const App = {
 
         checkDate('g_insurance', 'status_insurance');
         checkDate('g_mot', 'status_mot');
+        checkDate('g_tax', 'status_tax'); // Added new check
         checkDate('g_service', 'status_service');
     },
 
