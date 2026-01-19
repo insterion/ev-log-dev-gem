@@ -81,7 +81,8 @@
         <option value="Tyres">Гуми</option>
         <option value="Service">Сервиз</option>
         <option value="Insurance">Застраховка</option>
-        <option value="Tax">Данък/MOT</option>
+        <option value="Tax">Road Tax</option>
+        <option value="MOT">MOT (Преглед)</option>
         <option value="Other">Друго</option>
       </select>
     </div>
@@ -108,13 +109,19 @@
         </div>
 
         <div class="reminder-row">
-            <label>MOT / Tax</label>
+            <label>MOT (Преглед)</label>
             <input type="date" id="g_mot" class="garage-date">
             <div id="status_mot" class="status-badge">--</div>
         </div>
 
         <div class="reminder-row">
-            <label>Service</label>
+            <label>Road Tax (Данък)</label>
+            <input type="date" id="g_tax" class="garage-date">
+            <div id="status_tax" class="status-badge">--</div>
+        </div>
+
+        <div class="reminder-row">
+            <label>Service (Обслужване)</label>
             <input type="date" id="g_service" class="garage-date">
             <div id="status_service" class="status-badge">--</div>
         </div>
