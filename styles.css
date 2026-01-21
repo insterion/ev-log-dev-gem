@@ -81,3 +81,13 @@ button:active { transform: scale(0.98); }
 .status-warning { background: rgba(255, 152, 0, 0.2); color: var(--warning); }
 .status-danger { background: rgba(244, 67, 54, 0.2); color: var(--danger); }
 .compare-box { margin-top: 20px; }
+/* EDIT BUTTON STYLES */
+.action-btn-group { display: flex; gap: 10px; }
+.edit-btn { 
+    background: none; border: none; color: #ff9800; /* Orange */
+    font-size: 1.2em; padding: 0 5px; cursor: pointer; line-height: 1; 
+}
+.update-mode-btn {
+    background-color: #ff9800 !important; /* Променя цвета на бутона при редакция */
+    color: #000 !important;
+}
