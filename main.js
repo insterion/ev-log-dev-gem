@@ -1,16 +1,14 @@
-/* main.js - Firebase Cloud Version */
+/* main.js - Edit & Offline Support Version */
 
-// Import Firebase SDKs from CDN (No build tool needed)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
-    getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, setDoc, getDoc 
+    getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, setDoc, updateDoc, enableIndexedDbPersistence 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { 
     getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
-// ЗАМЕНИ ТОВА С ТВОИТЕ ДАННИ ОТ FIREBASE CONSOLE:
 const firebaseConfig = {
   apiKey: "AIzaSyA-FbmvdK3eaYUsaT9Iqc3dUILH4rYDe8U",
   authDomain: "ev-log-2487f.firebaseapp.com",
@@ -27,14 +25,25 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// --- ENABLE OFFLINE PERSISTENCE ---
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code == 'failed-precondition') {
+        console.log('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
+    } else if (err.code == 'unimplemented') {
+        console.log('The current browser does not support all of the features required to enable persistence');
+    }
+});
+
 // App State
 const State = {
     user: null,
     logs: [],
     costs: [],
-    garage: { ev: {}, ice: {} }, // Local cache of garage
+    garage: { ev: {}, ice: {} },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
-    currentGarageTab: 'ev'
+    currentGarageTab: 'ev',
+    editLogId: null,  // ID на записа, който редактираме в момента
+    editCostId: null  // ID на разхода, който редактираме
 };
 
 // --- AUTH LOGIC ---
@@ -52,78 +61,61 @@ btnLogout.addEventListener('click', () => {
     signOut(auth);
 });
 
-// Main Entry Point
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        // Logged In
         State.user = user;
         loginScreen.style.display = 'none';
         appContent.style.display = 'block';
         if(userEmailSpan) userEmailSpan.innerText = user.email;
-        console.log("User:", user.email);
-        
-        // Init App Data Listeners
         initDataListeners();
         initUI();
     } else {
-        // Logged Out
         State.user = null;
         loginScreen.style.display = 'flex';
         appContent.style.display = 'none';
     }
 });
 
-// --- FIRESTORE LISTENERS (REAL-TIME DATA) ---
+// --- FIRESTORE LISTENERS ---
 let unsubscribeLogs, unsubscribeCosts, unsubscribeGarage, unsubscribeSettings;
 
 function initDataListeners() {
     const uid = State.user.uid;
 
-    // 1. Logs Listener
+    // Logs
     const qLogs = query(collection(db, "logs"), where("uid", "==", uid));
     unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
         State.logs = [];
-        snapshot.forEach((doc) => {
-            State.logs.push({ id: doc.id, ...doc.data() });
-        });
-        // Sort Newest First
+        snapshot.forEach((doc) => State.logs.push({ id: doc.id, ...doc.data() }));
         State.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
         renderLogList();
         updateStats();
     });
 
-    // 2. Costs Listener
+    // Costs
     const qCosts = query(collection(db, "costs"), where("uid", "==", uid));
     unsubscribeCosts = onSnapshot(qCosts, (snapshot) => {
         State.costs = [];
-        snapshot.forEach((doc) => {
-            State.costs.push({ id: doc.id, ...doc.data() });
-        });
+        snapshot.forEach((doc) => State.costs.push({ id: doc.id, ...doc.data() }));
         State.costs.sort((a, b) => new Date(b.date) - new Date(a.date));
         renderCostsList();
         updateStats();
     });
 
-    // 3. Garage Listener (Single Doc per user or Collection?)
-    // Strategy: Collection 'garage', Doc ID = 'ev' & 'ice' inside user path is simpler
-    // Let's use a sub-collection approach or just filtering by type in a root collection
-    // Simplest: Collection "garage_data", docID = `uid_ev` and `uid_ice`
-    
-    // Actually, let's just listen to the whole garage collection for this user
+    // Garage
     const qGarage = query(collection(db, "garage"), where("uid", "==", uid));
     unsubscribeGarage = onSnapshot(qGarage, (snapshot) => {
-        State.garage = { ev: {}, ice: {} }; // Reset
+        State.garage = { ev: {}, ice: {} };
         snapshot.forEach((doc) => {
             const data = doc.data();
             if(data.carType === 'ev') State.garage.ev = data;
             if(data.carType === 'ice') State.garage.ice = data;
         });
-        loadGarageDataToUI(); // Refresh UI
+        loadGarageDataToUI();
     });
 
-    // 4. Settings (Single doc)
-    const docRef = doc(db, "settings", uid);
-    unsubscribeSettings = onSnapshot(docRef, (docSnap) => {
+    // Settings
+    unsubscribeSettings = onSnapshot(doc(db, "settings", uid), (docSnap) => {
         if (docSnap.exists()) {
             State.settings = docSnap.data();
             loadSettingsToUI();
@@ -132,49 +124,48 @@ function initDataListeners() {
     });
 }
 
-// --- DATABASE ACTIONS ---
-async function dbAddLog(entry) {
-    try {
-        await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid });
-    } catch (e) { alert("Error adding log: " + e.message); }
-}
+// --- DATABASE ACTIONS (CRUD) ---
 
+// LOGS
+async function dbAddLog(entry) {
+    try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } 
+    catch (e) { alert("Error: " + e.message); }
+}
+async function dbUpdateLog(id, entry) {
+    try { await updateDoc(doc(db, "logs", id), entry); } 
+    catch (e) { alert("Error updating: " + e.message); }
+}
 async function dbDeleteLog(id) {
     try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); }
 }
 
+// COSTS
 async function dbAddCost(entry) {
-    try {
-        await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid });
-    } catch (e) { alert("Error adding cost: " + e.message); }
+    try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } 
+    catch (e) { alert("Error: " + e.message); }
 }
-
+async function dbUpdateCost(id, entry) {
+    try { await updateDoc(doc(db, "costs", id), entry); } 
+    catch (e) { alert("Error updating: " + e.message); }
+}
 async function dbDeleteCost(id) {
     try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); }
 }
 
+// GARAGE & SETTINGS
 async function dbSaveGarage(type, data) {
-    // ID schema: uid_ev or uid_ice
     const docId = `${State.user.uid}_${type}`;
     try {
-        await setDoc(doc(db, "garage", docId), { 
-            ...data, 
-            uid: State.user.uid, 
-            carType: type 
-        });
+        await setDoc(doc(db, "garage", docId), { ...data, uid: State.user.uid, carType: type });
         alert("Garage Saved!");
-    } catch (e) { alert("Error saving garage: " + e.message); }
-}
-
-async function dbSaveSettings(settings) {
-    try {
-        await setDoc(doc(db, "settings", State.user.uid), settings);
-        alert("Settings Saved!");
     } catch (e) { alert("Error: " + e.message); }
 }
+async function dbSaveSettings(settings) {
+    try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } 
+    catch (e) { alert("Error: " + e.message); }
+}
 
-
-// --- UI LOGIC (Mostly same as before, but calling DB functions) ---
+// --- UI LOGIC ---
 
 function initUI() {
     bindNav();
@@ -204,15 +195,17 @@ function bindNav() {
     });
 }
 
-// LOG FORM
+// --- LOG FORM LOGIC (With Edit) ---
 function bindLogForm() {
     const btnAdd = document.getElementById('addEntry');
     const typeSelect = document.getElementById('type');
     const priceInput = document.getElementById('price');
     const kwhInput = document.getElementById('kwh');
     
-    // Auto Price
+    // Auto Price logic
     typeSelect.addEventListener('change', () => {
+        // Only change price if we are NOT in edit mode OR if user explicitly changed type
+        // Actually, simple logic: if user changes type, update price.
         const opt = typeSelect.options[typeSelect.selectedIndex];
         if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
@@ -226,9 +219,7 @@ function bindLogForm() {
         }
         updateLogPreview();
     });
-    
-    // Triggers
-    typeSelect.dispatchEvent(new Event('change'));
+
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
 
@@ -240,11 +231,21 @@ function bindLogForm() {
         const note = document.getElementById('note').value;
 
         if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields');
+        const entryData = { date, kwh, price, type, note, total: kwh * price };
 
-        // FIREBASE ADD
-        dbAddLog({ date, kwh, price, type, note, total: kwh * price });
+        if (State.editLogId) {
+            // UPDATE MODE
+            dbUpdateLog(State.editLogId, entryData);
+            // Reset UI
+            State.editLogId = null;
+            btnAdd.innerText = "Add Entry";
+            btnAdd.classList.remove("update-mode-btn");
+        } else {
+            // CREATE MODE
+            dbAddLog(entryData);
+        }
 
-        // Reset
+        // Clear form
         kwhInput.value = '';
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
@@ -255,7 +256,6 @@ function updateLogPreview() {
     const kwh = parseFloat(document.getElementById('kwh').value) || 0;
     const price = parseFloat(document.getElementById('price').value) || 0;
     const div = document.getElementById('log-preview');
-    
     if(kwh <= 0 || price <= 0) { div.style.display = 'none'; return; }
 
     const range = kwh * State.settings.evEff;
@@ -283,7 +283,7 @@ function renderLogList() {
     State.logs.forEach(l => {
         const cost = l.total || (l.kwh * l.price);
         html += `
-        <div class="log-entry">
+        <div class="log-entry" id="log-row-${l.id}">
             <div class="log-info">
                 <div class="log-main-row">
                     <span>${l.kwh} kWh</span>
@@ -294,22 +294,56 @@ function renderLogList() {
                 </div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
             </div>
-            <button class="delete-btn" id="del-log-${l.id}">×</button>
+            <div class="action-btn-group">
+                <button class="edit-btn" id="edit-log-${l.id}">✎</button>
+                <button class="delete-btn" id="del-log-${l.id}">×</button>
+            </div>
         </div>`;
     });
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
-    // Attach delete events manually because onclick="App..." is not reliable with modules
+    // Attach Events
     State.logs.forEach(l => {
+        // Delete
         document.getElementById(`del-log-${l.id}`).addEventListener('click', () => {
             if(confirm('Delete?')) dbDeleteLog(l.id);
+        });
+        // Edit
+        document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
+            // Populate Form
+            document.getElementById('date').value = l.date;
+            document.getElementById('kwh').value = l.kwh;
+            document.getElementById('price').value = l.price;
+            document.getElementById('note').value = l.note || '';
+            
+            // Try to set type. Hard because text might vary with emojis. 
+            // Simple approach: loop options and see if text matches.
+            const sel = document.getElementById('type');
+            for(let i=0; i<sel.options.length; i++) {
+                if(sel.options[i].text === l.type) {
+                    sel.selectedIndex = i;
+                    break;
+                }
+            }
+
+            // Set UI to Edit Mode
+            State.editLogId = l.id;
+            const btn = document.getElementById('addEntry');
+            btn.innerText = "Update Entry";
+            btn.classList.add("update-mode-btn");
+            
+            // Scroll to top
+            document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
+            updateLogPreview();
         });
     });
 }
 
-// COSTS FORM
+// --- COSTS FORM LOGIC (With Edit) ---
 function bindCostsForm() {
-    document.getElementById('c_add').addEventListener('click', () => {
+    const btnAdd = document.getElementById('c_add');
+    
+    btnAdd.addEventListener('click', () => {
         const date = document.getElementById('c_date').value;
         const amount = parseFloat(document.getElementById('c_amount').value);
         const cat = document.getElementById('c_category').value;
@@ -318,7 +352,18 @@ function bindCostsForm() {
 
         if(!date || !amount) return alert('Enter amount and date');
         
-        dbAddCost({ date, amount, cat, note, target });
+        const entryData = { date, amount, cat, note, target };
+
+        if (State.editCostId) {
+            // UPDATE
+            dbUpdateCost(State.editCostId, entryData);
+            State.editCostId = null;
+            btnAdd.innerText = "Add Cost";
+            btnAdd.classList.remove("update-mode-btn");
+        } else {
+            // ADD
+            dbAddCost(entryData);
+        }
         
         document.getElementById('c_amount').value = '';
         document.getElementById('c_note').value = '';
@@ -341,7 +386,10 @@ function renderCostsList() {
                 <div class="log-sub-row"><span>${c.date}</span></div>
                 ${c.note ? `<div class="log-note">${c.note}</div>` : ''}
             </div>
-            <button class="delete-btn" id="del-cost-${c.id}">×</button>
+            <div class="action-btn-group">
+                <button class="edit-btn" id="edit-cost-${c.id}">✎</button>
+                <button class="delete-btn" id="del-cost-${c.id}">×</button>
+            </div>
         </div>`;
     });
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма разходи</p>';
@@ -350,12 +398,25 @@ function renderCostsList() {
         document.getElementById(`del-cost-${c.id}`).addEventListener('click', () => {
             if(confirm('Delete?')) dbDeleteCost(c.id);
         });
+        document.getElementById(`edit-cost-${c.id}`).addEventListener('click', () => {
+            document.getElementById('c_date').value = c.date;
+            document.getElementById('c_amount').value = c.amount;
+            document.getElementById('c_category').value = c.cat;
+            document.getElementById('c_note').value = c.note || '';
+            document.getElementById('c_target').value = c.target;
+
+            State.editCostId = c.id;
+            const btn = document.getElementById('c_add');
+            btn.innerText = "Update Cost";
+            btn.classList.add("update-mode-btn");
+            
+            document.querySelector('#costs').scrollIntoView({behavior: 'smooth'});
+        });
     });
 }
 
-// GARAGE
+// --- GARAGE, SETTINGS, STATS (Same as before) ---
 function bindGarage() {
-    // Switcher
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
     
@@ -373,7 +434,6 @@ function bindGarage() {
         loadGarageDataToUI();
     });
 
-    // Save Button
     document.getElementById('saveGarageManual').addEventListener('click', () => {
         const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
         let dataToSave = {};
@@ -388,11 +448,7 @@ function bindGarage() {
 function loadGarageDataToUI() {
     const currentData = State.garage[State.currentGarageTab] || {};
     const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
-    
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.value = currentData[id] || "";
-    });
+    ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = currentData[id] || ""; });
     updateGarageStatus();
 }
 
@@ -401,19 +457,11 @@ function updateGarageStatus() {
         const val = document.getElementById(id).value;
         const el = document.getElementById(statusId);
         if(!el) return;
-        
-        if(!val) {
-            el.innerText = "--"; el.className = "status-badge"; return;
-        }
-
+        if(!val) { el.innerText = "--"; el.className = "status-badge"; return; }
         const diff = Math.ceil((new Date(val) - new Date()) / (1000 * 60 * 60 * 24)); 
-        if(diff < 0) {
-            el.innerText = `ИЗТЕКЛО!`; el.className = "status-badge status-danger";
-        } else if (diff <= 30) {
-            el.innerText = `${diff} дни`; el.className = "status-badge status-warning";
-        } else {
-            el.innerText = `${diff} дни`; el.className = "status-badge status-ok";
-        }
+        if(diff < 0) { el.innerText = `ИЗТЕКЛО!`; el.className = "status-badge status-danger"; } 
+        else if (diff <= 30) { el.innerText = `${diff} дни`; el.className = "status-badge status-warning"; } 
+        else { el.innerText = `${diff} дни`; el.className = "status-badge status-ok"; }
     };
     checkDate('g_insurance', 'status_insurance');
     checkDate('g_mot', 'status_mot');
@@ -421,7 +469,6 @@ function updateGarageStatus() {
     checkDate('g_service', 'status_service');
 }
 
-// SETTINGS & STATS
 function bindSettings() {
     document.getElementById('saveCompareSettings').addEventListener('click', () => {
         const s = {
@@ -458,9 +505,7 @@ function bindCompare() {
 
 function updateStats() {
     const div = document.getElementById('tco-dashboard');
-    if(!State.logs.length && !State.costs.length) { 
-        if(div) div.style.display = 'none'; return; 
-    }
+    if(!State.logs.length && !State.costs.length) { if(div) div.style.display = 'none'; return; }
     if(div) div.style.display = 'block';
 
     let evCharge = 0, kwhTot = 0;
@@ -497,7 +542,6 @@ function updateStats() {
             <div style="color:#666; font-size:0.8em">ICE (£${totalICE.toFixed(0)}) vs EV (£${totalEV.toFixed(0)})</div>
         `;
     }
-    
     if (typeof Chart !== 'undefined') renderChart();
 }
 
