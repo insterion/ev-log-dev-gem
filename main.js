@@ -1,4 +1,4 @@
-/* main.js - Edit & Offline Support Version */
+/* main.js - Edit, Offline & Export Version */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -25,7 +25,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// --- ENABLE OFFLINE PERSISTENCE ---
+// Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code == 'failed-precondition') {
         console.log('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
@@ -42,8 +42,8 @@ const State = {
     garage: { ev: {}, ice: {} },
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
     currentGarageTab: 'ev',
-    editLogId: null,  // ID на записа, който редактираме в момента
-    editCostId: null  // ID на разхода, който редактираме
+    editLogId: null,
+    editCostId: null
 };
 
 // --- AUTH LOGIC ---
@@ -124,45 +124,71 @@ function initDataListeners() {
     });
 }
 
-// --- DATABASE ACTIONS (CRUD) ---
+// --- DATABASE ACTIONS ---
+async function dbAddLog(entry) { try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
+async function dbUpdateLog(id, entry) { try { await updateDoc(doc(db, "logs", id), entry); } catch (e) { alert("Error updating: " + e.message); } }
+async function dbDeleteLog(id) { try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); } }
 
-// LOGS
-async function dbAddLog(entry) {
-    try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } 
-    catch (e) { alert("Error: " + e.message); }
-}
-async function dbUpdateLog(id, entry) {
-    try { await updateDoc(doc(db, "logs", id), entry); } 
-    catch (e) { alert("Error updating: " + e.message); }
-}
-async function dbDeleteLog(id) {
-    try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); }
-}
+async function dbAddCost(entry) { try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
+async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error updating: " + e.message); } }
+async function dbDeleteCost(id) { try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); } }
 
-// COSTS
-async function dbAddCost(entry) {
-    try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } 
-    catch (e) { alert("Error: " + e.message); }
-}
-async function dbUpdateCost(id, entry) {
-    try { await updateDoc(doc(db, "costs", id), entry); } 
-    catch (e) { alert("Error updating: " + e.message); }
-}
-async function dbDeleteCost(id) {
-    try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); }
-}
-
-// GARAGE & SETTINGS
 async function dbSaveGarage(type, data) {
     const docId = `${State.user.uid}_${type}`;
-    try {
-        await setDoc(doc(db, "garage", docId), { ...data, uid: State.user.uid, carType: type });
-        alert("Garage Saved!");
-    } catch (e) { alert("Error: " + e.message); }
+    try { await setDoc(doc(db, "garage", docId), { ...data, uid: State.user.uid, carType: type }); alert("Garage Saved!"); } catch (e) { alert("Error: " + e.message); }
 }
 async function dbSaveSettings(settings) {
-    try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } 
-    catch (e) { alert("Error: " + e.message); }
+    try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
+}
+
+// --- CSV EXPORT FUNCTION ---
+function exportToCSV(data, filename) {
+    if (!data || !data.length) {
+        alert("Няма данни за експорт.");
+        return;
+    }
+
+    // Get headers from first object, filtering out 'uid' and 'id' if you want
+    // Or simpler: define manual headers for cleaner output
+    let headers = [];
+    if(filename.includes("Logs")) headers = ["Date", "Type", "KWh", "Price", "Total", "Note"];
+    else headers = ["Date", "Amount", "Category", "Target", "Note"];
+
+    let csvContent = headers.join(",") + "\n";
+
+    data.forEach(row => {
+        let rowStr = "";
+        if(filename.includes("Logs")) {
+            rowStr = [
+                row.date,
+                `"${row.type}"`, // Quote strings to handle commas
+                row.kwh,
+                row.price,
+                (row.total || (row.kwh*row.price)).toFixed(2),
+                `"${(row.note || '').replace(/"/g, '""')}"` // Escape quotes
+            ].join(",");
+        } else {
+            rowStr = [
+                row.date,
+                row.amount,
+                `"${row.cat}"`,
+                `"${row.target}"`,
+                `"${(row.note || '').replace(/"/g, '""')}"`
+            ].join(",");
+        }
+        csvContent += rowStr + "\n";
+    });
+
+    // Add BOM for Excel Cyrillic support
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // --- UI LOGIC ---
@@ -175,7 +201,6 @@ function initUI() {
     bindSettings();
     bindCompare();
     
-    // Set Today
     const today = new Date().toISOString().split('T')[0];
     if(document.getElementById('date')) document.getElementById('date').value = today;
     if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
@@ -195,17 +220,13 @@ function bindNav() {
     });
 }
 
-// --- LOG FORM LOGIC (With Edit) ---
 function bindLogForm() {
     const btnAdd = document.getElementById('addEntry');
     const typeSelect = document.getElementById('type');
     const priceInput = document.getElementById('price');
     const kwhInput = document.getElementById('kwh');
     
-    // Auto Price logic
     typeSelect.addEventListener('change', () => {
-        // Only change price if we are NOT in edit mode OR if user explicitly changed type
-        // Actually, simple logic: if user changes type, update price.
         const opt = typeSelect.options[typeSelect.selectedIndex];
         if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
@@ -234,18 +255,13 @@ function bindLogForm() {
         const entryData = { date, kwh, price, type, note, total: kwh * price };
 
         if (State.editLogId) {
-            // UPDATE MODE
             dbUpdateLog(State.editLogId, entryData);
-            // Reset UI
             State.editLogId = null;
             btnAdd.innerText = "Add Entry";
             btnAdd.classList.remove("update-mode-btn");
         } else {
-            // CREATE MODE
             dbAddLog(entryData);
         }
-
-        // Clear form
         kwhInput.value = '';
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
@@ -302,47 +318,31 @@ function renderLogList() {
     });
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
-    // Attach Events
     State.logs.forEach(l => {
-        // Delete
         document.getElementById(`del-log-${l.id}`).addEventListener('click', () => {
             if(confirm('Delete?')) dbDeleteLog(l.id);
         });
-        // Edit
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
-            // Populate Form
             document.getElementById('date').value = l.date;
             document.getElementById('kwh').value = l.kwh;
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
-            
-            // Try to set type. Hard because text might vary with emojis. 
-            // Simple approach: loop options and see if text matches.
             const sel = document.getElementById('type');
             for(let i=0; i<sel.options.length; i++) {
-                if(sel.options[i].text === l.type) {
-                    sel.selectedIndex = i;
-                    break;
-                }
+                if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; }
             }
-
-            // Set UI to Edit Mode
             State.editLogId = l.id;
             const btn = document.getElementById('addEntry');
             btn.innerText = "Update Entry";
             btn.classList.add("update-mode-btn");
-            
-            // Scroll to top
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
             updateLogPreview();
         });
     });
 }
 
-// --- COSTS FORM LOGIC (With Edit) ---
 function bindCostsForm() {
     const btnAdd = document.getElementById('c_add');
-    
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('c_date').value;
         const amount = parseFloat(document.getElementById('c_amount').value);
@@ -351,20 +351,16 @@ function bindCostsForm() {
         const target = document.getElementById('c_target').value;
 
         if(!date || !amount) return alert('Enter amount and date');
-        
         const entryData = { date, amount, cat, note, target };
 
         if (State.editCostId) {
-            // UPDATE
             dbUpdateCost(State.editCostId, entryData);
             State.editCostId = null;
             btnAdd.innerText = "Add Cost";
             btnAdd.classList.remove("update-mode-btn");
         } else {
-            // ADD
             dbAddCost(entryData);
         }
-        
         document.getElementById('c_amount').value = '';
         document.getElementById('c_note').value = '';
     });
@@ -404,18 +400,15 @@ function renderCostsList() {
             document.getElementById('c_category').value = c.cat;
             document.getElementById('c_note').value = c.note || '';
             document.getElementById('c_target').value = c.target;
-
             State.editCostId = c.id;
             const btn = document.getElementById('c_add');
             btn.innerText = "Update Cost";
             btn.classList.add("update-mode-btn");
-            
             document.querySelector('#costs').scrollIntoView({behavior: 'smooth'});
         });
     });
 }
 
-// --- GARAGE, SETTINGS, STATS (Same as before) ---
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
@@ -437,10 +430,7 @@ function bindGarage() {
     document.getElementById('saveGarageManual').addEventListener('click', () => {
         const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
         let dataToSave = {};
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if(el) dataToSave[id] = el.value;
-        });
+        ids.forEach(id => { const el = document.getElementById(id); if(el) dataToSave[id] = el.value; });
         dbSaveGarage(State.currentGarageTab, dataToSave);
     });
 }
@@ -477,6 +467,15 @@ function bindSettings() {
             fuelPrice: parseFloat(document.getElementById('set_fuel_price').value)
         };
         dbSaveSettings(s);
+    });
+
+    // NEW: Export Buttons
+    document.getElementById('btnExportLogs').addEventListener('click', () => {
+        exportToCSV(State.logs, 'EV_Logs.csv');
+    });
+    
+    document.getElementById('btnExportCosts').addEventListener('click', () => {
+        exportToCSV(State.costs, 'EV_Costs.csv');
     });
 }
 
@@ -548,18 +547,15 @@ function updateStats() {
 function renderChart() {
     const ctx = document.getElementById('tcoChart');
     if(!ctx) return;
-    
     let events = [];
     State.logs.forEach(l => events.push({ date: l.date, ev: (l.total||l.kwh*l.price), ice: (l.kwh*State.settings.evEff/State.settings.iceMpg)*4.54609*State.settings.fuelPrice }));
     State.costs.forEach(c => events.push({ date: c.date, ev: (c.target!=='ice'?parseFloat(c.amount):0), ice: (c.target==='ice'?parseFloat(c.amount):0) }));
     events.sort((a,b) => new Date(a.date) - new Date(b.date));
-    
     let labels=[], dEv=[], dIce=[], cEv=0, cIce=0;
     events.forEach(e => {
         cEv += e.ev; cIce += e.ice;
         labels.push(e.date); dEv.push(cEv); dIce.push(cIce);
     });
-
     if(window.myChart) window.myChart.destroy();
     window.myChart = new Chart(ctx, {
         type: 'line',
