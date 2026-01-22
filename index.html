@@ -166,6 +166,16 @@
             <div class="section-block"><label>Цена Гориво (£/Liter)</label><input type="number" id="set_fuel_price" step="0.01"></div>
             <button id="saveCompareSettings">Save Settings</button>
         </div>
+
+        <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
+            <h3>💾 Експорт на данни</h3>
+            <p style="font-size:0.8rem; color:#888; margin-top:0;">Свали всички данни в Excel (CSV) формат.</p>
+            <div style="display:flex; gap:10px;">
+                <button id="btnExportLogs" style="background:#333; margin-top:10px;">📄 Logs.csv</button>
+                <button id="btnExportCosts" style="background:#333; margin-top:10px;">💰 Costs.csv</button>
+            </div>
+        </div>
+
         <div style="text-align:center; color:#666; font-size:0.8rem;">Logged in as: <span id="user-email"></span></div>
       </section>
   </div>
