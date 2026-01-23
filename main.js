@@ -1,4 +1,4 @@
-/* main.js - Edit, Offline & Export Version */
+/* main.js - Fixed "Missing Fields" & Included Config */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -8,7 +8,7 @@ import {
     getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// --- PASTE YOUR FIREBASE CONFIG HERE ---
+// --- ТВОЯТ FIREBASE CONFIG (Вграден) ---
 const firebaseConfig = {
   apiKey: "AIzaSyA-FbmvdK3eaYUsaT9Iqc3dUILH4rYDe8U",
   authDomain: "ev-log-2487f.firebaseapp.com",
@@ -148,8 +148,6 @@ function exportToCSV(data, filename) {
         return;
     }
 
-    // Get headers from first object, filtering out 'uid' and 'id' if you want
-    // Or simpler: define manual headers for cleaner output
     let headers = [];
     if(filename.includes("Logs")) headers = ["Date", "Type", "KWh", "Price", "Total", "Note"];
     else headers = ["Date", "Amount", "Category", "Target", "Note"];
@@ -161,11 +159,11 @@ function exportToCSV(data, filename) {
         if(filename.includes("Logs")) {
             rowStr = [
                 row.date,
-                `"${row.type}"`, // Quote strings to handle commas
+                `"${row.type}"`,
                 row.kwh,
                 row.price,
                 (row.total || (row.kwh*row.price)).toFixed(2),
-                `"${(row.note || '').replace(/"/g, '""')}"` // Escape quotes
+                `"${(row.note || '').replace(/"/g, '""')}"`
             ].join(",");
         } else {
             rowStr = [
@@ -179,7 +177,6 @@ function exportToCSV(data, filename) {
         csvContent += rowStr + "\n";
     });
 
-    // Add BOM for Excel Cyrillic support
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -226,7 +223,8 @@ function bindLogForm() {
     const priceInput = document.getElementById('price');
     const kwhInput = document.getElementById('kwh');
     
-    typeSelect.addEventListener('change', () => {
+    // Logic to sync price from dropdown
+    const syncPrice = () => {
         const opt = typeSelect.options[typeSelect.selectedIndex];
         if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
@@ -239,19 +237,29 @@ function bindLogForm() {
             priceInput.style.background = "#222";
         }
         updateLogPreview();
-    });
+    };
 
+    // Events
+    typeSelect.addEventListener('change', syncPrice);
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
+
+    // *** FIX: Run syncPrice immediately to fill the field on load ***
+    syncPrice();
 
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('date').value;
         const kwh = parseFloat(kwhInput.value);
+        
+        // Ensure we try to get price one last time if input is empty
+        if (!priceInput.value) syncPrice();
         const price = parseFloat(priceInput.value);
+        
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
 
-        if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields');
+        if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields (Check Price or Date)');
+        
         const entryData = { date, kwh, price, type, note, total: kwh * price };
 
         if (State.editLogId) {
@@ -336,6 +344,7 @@ function renderLogList() {
             btn.innerText = "Update Entry";
             btn.classList.add("update-mode-btn");
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
+            // Call syncPrice manually here as well would be good, but UI will act correctly due to events
             updateLogPreview();
         });
     });
@@ -469,7 +478,7 @@ function bindSettings() {
         dbSaveSettings(s);
     });
 
-    // NEW: Export Buttons
+    // Export Buttons
     document.getElementById('btnExportLogs').addEventListener('click', () => {
         exportToCSV(State.logs, 'EV_Logs.csv');
     });
