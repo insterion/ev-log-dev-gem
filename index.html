@@ -35,40 +35,51 @@
         <button class="tabbtn" data-tab="settings">Settings</button>
       </nav>
 
-      <section id="log" class="tab active">
-        <div class="section-block">
-          <label>Дата</label>
-          <input type="date" id="date" />
+     <section id="log" class="tab active">
+        
+        <div id="home-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+            </div>
+
+        <h3>Добави Зареждане</h3>
+        
+        <div class="input-group">
+            <label>Дата</label>
+            <input type="date" id="date">
         </div>
-        <div class="section-block">
-          <label>kWh</label>
-          <input type="number" id="kwh" placeholder="40" step="0.1" inputmode="decimal" />
+
+        <div class="input-group">
+            <label>Тип</label>
+            <select id="type">
+                <option value="home" data-price="0.29">Домашно (0.29)</option>
+                <option value="public" data-price="0.56" selected>Публично (0.56)</option>
+                <option value="fast" data-price="0.79">Бързо (0.79)</option>
+                <option value="work" data-price="0.00">Служебно (0.00)</option>
+            </select>
         </div>
-        <div id="log-preview" style="display:none; margin-bottom:15px;"></div>
-        <div class="section-block">
-          <label>Тип</label>
-          <select id="type">
-            <option value="public" data-price="0.56">🔌 Публично (0.56)</option>
-            <option value="public-xp" data-price="0.79">⚡ Публично Скъпо (0.79)</option>
-            <option value="home" data-price="0.24">🏠 Домашно (0.24)</option>
-            <option value="home-night" data-price="0.07">🌙 Домашно Нощ (0.07)</option>
-            <option value="free" data-price="0.00">🆓 Безплатно</option>
-            <option value="manual">✏️ Ръчно / Друго</option>
-          </select>
+
+        <div class="input-group">
+            <label>Заредено (kWh)</label>
+            <input type="number" id="kwh" placeholder="ex. 45.5" step="0.1">
         </div>
-        <div class="section-block">
-          <label>Цена (£/kWh)</label>
-          <input type="number" id="price" placeholder="0.56" step="0.01" inputmode="decimal" />
+
+        <div class="input-group">
+            <label>Цена (£/kWh)</label>
+            <input type="number" id="price" step="0.01" placeholder="0.56">
         </div>
-        <div class="section-block">
-          <label>Бележка</label>
-          <input type="text" id="note" placeholder="Location..." />
+
+        <div id="log-preview" style="margin-bottom:15px; display:none;"></div>
+
+        <div class="input-group">
+            <label>Бележка (Optional)</label>
+            <input type="text" id="note" placeholder="ex. Lidl charging">
         </div>
+
         <button id="addEntry">Add Entry</button>
-        <details id="logDetails" open style="margin-top:20px;">
-          <summary>История</summary>
-          <div id="logTable" style="margin-top:10px;"></div>
-        </details>
+
+        <h3>История</h3>
+        <div id="logTable">
+            <p>Loading...</p>
+        </div>
       </section>
 
       <section id="costs" class="tab">
