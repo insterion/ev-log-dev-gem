@@ -136,10 +136,17 @@
         </div>
       </section>
 
-      <section id="compare" class="tab">
+     <section id="compare" class="tab">
         <div id="tco-dashboard" style="display:none; margin-bottom:20px;">
             <h3>📊 Статистика</h3>
+            
+            <div style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
+                <button id="btn-chart-cum" class="small-btn active" style="flex:1;">📈 Общо (Line)</button>
+                <button id="btn-chart-month" class="small-btn" style="flex:1;">📊 Месечно (Bar)</button>
+            </div>
+
             <div id="tco-card" style="padding:15px; border-radius:10px; text-align:center; background:#222; margin-bottom:15px;"></div>
+            
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
                 <div style="background:#1a1a1a; padding:10px; border-radius:5px; border-left:2px solid #4CAF50"><small style="color:#888">EV Ток</small><div id="stat-ev-charge" style="font-weight:bold">£0</div></div>
                 <div style="background:#1a1a1a; padding:10px; border-radius:5px; border-left:2px solid #4CAF50"><small style="color:#888">EV Поддръжка</small><div id="stat-ev-maint" style="font-weight:bold">£0</div></div>
@@ -147,8 +154,12 @@
                 <div style="background:#1a1a1a; padding:10px; border-radius:5px; border-left:2px solid #f44336"><small style="color:#888">ICE Поддръжка</small><div id="stat-ice-maint" style="font-weight:bold">£0</div></div>
             </div>
             <div style="text-align:center; margin-bottom:10px;">Пробег: <span id="stat-miles">0</span> mi</div>
-            <div style="background:#1a1a1a; padding:10px; border-radius:10px; height:250px;"><canvas id="tcoChart"></canvas></div>
+            
+            <div style="background:#1a1a1a; padding:10px; border-radius:10px; height:300px;">
+                <canvas id="tcoChart"></canvas>
+            </div>
         </div>
+
         <h3>🧮 Калкулатор (Trip)</h3>
         <div class="compare-box" style="background:#111; padding:15px; border-radius:10px; text-align:center;">
             <label>Разстояние (мили)</label>
