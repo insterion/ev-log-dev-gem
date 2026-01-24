@@ -1,4 +1,4 @@
-/* main.js - Version: Monthly Charts & Fixed Inputs */
+/* main.js - Version: Home Dashboard + Monthly Charts */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -27,11 +27,7 @@ const provider = new GoogleAuthProvider();
 
 // Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code == 'failed-precondition') {
-        console.log('Multiple tabs open persistence error.');
-    } else if (err.code == 'unimplemented') {
-        console.log('Browser not supported for persistence.');
-    }
+    console.log("Persistence logic:", err.code);
 });
 
 // App State
@@ -44,7 +40,7 @@ const State = {
     currentGarageTab: 'ev',
     editLogId: null,
     editCostId: null,
-    chartMode: 'cumulative' // 'cumulative' or 'monthly'
+    chartMode: 'cumulative' 
 };
 
 // --- AUTH LOGIC ---
@@ -58,9 +54,7 @@ btnLogin.addEventListener('click', () => {
     signInWithPopup(auth, provider).catch((error) => alert("Login failed: " + error.message));
 });
 
-btnLogout.addEventListener('click', () => {
-    signOut(auth);
-});
+btnLogout.addEventListener('click', () => signOut(auth));
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
@@ -90,6 +84,7 @@ function initDataListeners() {
         snapshot.forEach((doc) => State.logs.push({ id: doc.id, ...doc.data() }));
         State.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
         renderLogList();
+        renderHomeDashboard(); // <--- NEW: Update dashboard when logs change
         updateStats();
     });
 
@@ -127,11 +122,11 @@ function initDataListeners() {
 
 // --- DATABASE ACTIONS ---
 async function dbAddLog(entry) { try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
-async function dbUpdateLog(id, entry) { try { await updateDoc(doc(db, "logs", id), entry); } catch (e) { alert("Error updating: " + e.message); } }
+async function dbUpdateLog(id, entry) { try { await updateDoc(doc(db, "logs", id), entry); } catch (e) { alert("Error: " + e.message); } }
 async function dbDeleteLog(id) { try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); } }
 
 async function dbAddCost(entry) { try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
-async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error updating: " + e.message); } }
+async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error: " + e.message); } }
 async function dbDeleteCost(id) { try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); } }
 
 async function dbSaveGarage(type, data) {
@@ -142,9 +137,9 @@ async function dbSaveSettings(settings) {
     try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
 }
 
-// --- CSV EXPORT FUNCTION ---
+// --- EXPORT ---
 function exportToCSV(data, filename) {
-    if (!data || !data.length) { alert("Няма данни за експорт."); return; }
+    if (!data || !data.length) { alert("Няма данни."); return; }
     let headers = [];
     if(filename.includes("Logs")) headers = ["Date", "Type", "KWh", "Price", "Total", "Note"];
     else headers = ["Date", "Amount", "Category", "Target", "Note"];
@@ -207,6 +202,54 @@ function bindNav() {
     });
 }
 
+// *** NEW FUNCTION: HOME DASHBOARD ***
+function renderHomeDashboard() {
+    const div = document.getElementById('home-stats');
+    if(!div) return;
+
+    if(State.logs.length === 0) {
+        div.innerHTML = `<div style="grid-column: span 2; text-align:center; color:#666; font-style:italic;">Няма данни</div>`;
+        return;
+    }
+
+    // 1. Calculate This Month's Cost & kWh
+    const now = new Date();
+    const currentMonthKey = now.toISOString().slice(0, 7); // "2024-01"
+    
+    const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
+    const monthCost = monthLogs.reduce((sum, l) => sum + (l.total || l.kwh * l.price), 0);
+    const monthKwh = monthLogs.reduce((sum, l) => sum + l.kwh, 0);
+
+    // 2. Calculate Days Since Last Charge
+    // Logs are sorted descending, so logs[0] is the newest
+    const lastLogDate = new Date(State.logs[0].date);
+    // Reset time to midnight for accurate day diff
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const logMidnight = new Date(lastLogDate.getFullYear(), lastLogDate.getMonth(), lastLogDate.getDate());
+    
+    const diffTime = Math.abs(todayMidnight - logMidnight);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    
+    let daysText = "Днес";
+    if(diffDays === 1) daysText = "Вчера";
+    if(diffDays > 1) daysText = `${diffDays} дни`;
+
+    // 3. Render
+    div.innerHTML = `
+        <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #4CAF50;">
+            <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Този Месец</div>
+            <div style="font-size:1.4em; font-weight:bold; color:#fff;">£${monthCost.toFixed(2)}</div>
+            <div style="font-size:0.8em; color:#888;">${monthKwh.toFixed(0)} kWh</div>
+        </div>
+
+        <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #2196F3;">
+            <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Последно</div>
+            <div style="font-size:1.4em; font-weight:bold; color:#fff;">${daysText}</div>
+            <div style="font-size:0.8em; color:#888;">${State.logs[0].date}</div>
+        </div>
+    `;
+}
+
 function bindLogForm() {
     const btnAdd = document.getElementById('addEntry');
     const typeSelect = document.getElementById('type');
@@ -231,8 +274,6 @@ function bindLogForm() {
     typeSelect.addEventListener('change', syncPrice);
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
-    
-    // Initial sync
     syncPrice();
 
     btnAdd.addEventListener('click', () => {
@@ -243,7 +284,7 @@ function bindLogForm() {
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
 
-        if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields (Check Price or Date)');
+        if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields');
         const entryData = { date, kwh, price, type, note, total: kwh * price };
 
         if (State.editLogId) {
@@ -311,18 +352,14 @@ function renderLogList() {
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
     State.logs.forEach(l => {
-        document.getElementById(`del-log-${l.id}`).addEventListener('click', () => {
-            if(confirm('Delete?')) dbDeleteLog(l.id);
-        });
+        document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Delete?')) dbDeleteLog(l.id); });
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
             document.getElementById('date').value = l.date;
             document.getElementById('kwh').value = l.kwh;
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
             const sel = document.getElementById('type');
-            for(let i=0; i<sel.options.length; i++) {
-                if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; }
-            }
+            for(let i=0; i<sel.options.length; i++) { if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; } }
             State.editLogId = l.id;
             const btn = document.getElementById('addEntry');
             btn.innerText = "Update Entry";
@@ -348,9 +385,7 @@ function bindCostsForm() {
             State.editCostId = null;
             btnAdd.innerText = "Add Cost";
             btnAdd.classList.remove("update-mode-btn");
-        } else {
-            dbAddCost(entryData);
-        }
+        } else { dbAddCost(entryData); }
         document.getElementById('c_amount').value = '';
         document.getElementById('c_note').value = '';
     });
@@ -380,9 +415,7 @@ function renderCostsList() {
     });
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма разходи</p>';
     State.costs.forEach(c => {
-        document.getElementById(`del-cost-${c.id}`).addEventListener('click', () => {
-            if(confirm('Delete?')) dbDeleteCost(c.id);
-        });
+        document.getElementById(`del-cost-${c.id}`).addEventListener('click', () => { if(confirm('Delete?')) dbDeleteCost(c.id); });
         document.getElementById(`edit-cost-${c.id}`).addEventListener('click', () => {
             document.getElementById('c_date').value = c.date;
             document.getElementById('c_amount').value = c.amount;
@@ -456,13 +489,6 @@ function bindSettings() {
     });
     document.getElementById('btnExportLogs').addEventListener('click', () => exportToCSV(State.logs, 'EV_Logs.csv'));
     document.getElementById('btnExportCosts').addEventListener('click', () => exportToCSV(State.costs, 'EV_Costs.csv'));
-}
-
-function loadSettingsToUI() {
-    const s = State.settings;
-    if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = s.evEff;
-    if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = s.iceMpg;
-    if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = s.fuelPrice;
 }
 
 function bindCompare() {
@@ -570,15 +596,13 @@ function renderChart() {
         // --- NEW MONTHLY LOGIC ---
         let monthly = {}; // "2024-01": { ev:0, ice:0 }
         
-        // Add Logs (Charging)
         State.logs.forEach(l => {
-            const m = l.date.substring(0, 7); // YYYY-MM
+            const m = l.date.substring(0, 7);
             if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
             monthly[m].ev += (l.total || l.kwh*l.price);
             monthly[m].ice += (l.kwh * State.settings.evEff / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
         });
 
-        // Add Costs (Maintenance)
         State.costs.forEach(c => {
             const m = c.date.substring(0, 7);
             if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
@@ -586,7 +610,6 @@ function renderChart() {
             else monthly[m].ev += parseFloat(c.amount);
         });
 
-        // Sort Months
         labels = Object.keys(monthly).sort();
         let dEv = [], dIce = [];
         labels.forEach(m => {
@@ -600,23 +623,13 @@ function renderChart() {
         ];
     }
 
-    // 2. RENDER CHART
     window.myChart = new Chart(ctx, {
         type: State.chartMode === 'cumulative' ? 'line' : 'bar',
-        data: {
-            labels: labels,
-            datasets: dataSets
-        },
+        data: { labels: labels, datasets: dataSets },
         options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            scales: { 
-                x: { display: State.chartMode !== 'cumulative' }, // Hide X dates in line mode to avoid clutter
-                y: { grid: { color: '#333' } } 
-            },
-            plugins: { 
-                legend: { display: true, labels: { color: '#ccc' } } 
-            }
+            responsive: true, maintainAspectRatio: false,
+            scales: { x: { display: State.chartMode !== 'cumulative' }, y: { grid: { color: '#333' } } },
+            plugins: { legend: { display: true, labels: { color: '#ccc' } } }
         }
     });
 }
