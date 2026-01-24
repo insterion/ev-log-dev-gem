@@ -1,4 +1,4 @@
-/* main.js - Fixed "Missing Fields" & Included Config */
+/* main.js - Version: Monthly Charts & Fixed Inputs */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -8,7 +8,7 @@ import {
     getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// --- ТВОЯТ FIREBASE CONFIG (Вграден) ---
+// --- ТВОЯТ FIREBASE CONFIG ---
 const firebaseConfig = {
   apiKey: "AIzaSyA-FbmvdK3eaYUsaT9Iqc3dUILH4rYDe8U",
   authDomain: "ev-log-2487f.firebaseapp.com",
@@ -17,7 +17,7 @@ const firebaseConfig = {
   messagingSenderId: "313386156743",
   appId: "1:313386156743:web:8451e533f1af823c0534e2"
 };
-// ---------------------------------------
+// -----------------------------
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -28,9 +28,9 @@ const provider = new GoogleAuthProvider();
 // Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code == 'failed-precondition') {
-        console.log('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
+        console.log('Multiple tabs open persistence error.');
     } else if (err.code == 'unimplemented') {
-        console.log('The current browser does not support all of the features required to enable persistence');
+        console.log('Browser not supported for persistence.');
     }
 });
 
@@ -43,7 +43,8 @@ const State = {
     settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
     currentGarageTab: 'ev',
     editLogId: null,
-    editCostId: null
+    editCostId: null,
+    chartMode: 'cumulative' // 'cumulative' or 'monthly'
 };
 
 // --- AUTH LOGIC ---
@@ -143,40 +144,28 @@ async function dbSaveSettings(settings) {
 
 // --- CSV EXPORT FUNCTION ---
 function exportToCSV(data, filename) {
-    if (!data || !data.length) {
-        alert("Няма данни за експорт.");
-        return;
-    }
-
+    if (!data || !data.length) { alert("Няма данни за експорт."); return; }
     let headers = [];
     if(filename.includes("Logs")) headers = ["Date", "Type", "KWh", "Price", "Total", "Note"];
     else headers = ["Date", "Amount", "Category", "Target", "Note"];
 
     let csvContent = headers.join(",") + "\n";
-
     data.forEach(row => {
         let rowStr = "";
         if(filename.includes("Logs")) {
             rowStr = [
-                row.date,
-                `"${row.type}"`,
-                row.kwh,
-                row.price,
+                row.date, `"${row.type}"`, row.kwh, row.price,
                 (row.total || (row.kwh*row.price)).toFixed(2),
                 `"${(row.note || '').replace(/"/g, '""')}"`
             ].join(",");
         } else {
             rowStr = [
-                row.date,
-                row.amount,
-                `"${row.cat}"`,
-                `"${row.target}"`,
+                row.date, row.amount, `"${row.cat}"`, `"${row.target}"`,
                 `"${(row.note || '').replace(/"/g, '""')}"`
             ].join(",");
         }
         csvContent += rowStr + "\n";
     });
-
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -197,6 +186,7 @@ function initUI() {
     bindGarage();
     bindSettings();
     bindCompare();
+    bindChartControls();
     
     const today = new Date().toISOString().split('T')[0];
     if(document.getElementById('date')) document.getElementById('date').value = today;
@@ -223,7 +213,6 @@ function bindLogForm() {
     const priceInput = document.getElementById('price');
     const kwhInput = document.getElementById('kwh');
     
-    // Logic to sync price from dropdown
     const syncPrice = () => {
         const opt = typeSelect.options[typeSelect.selectedIndex];
         if(opt && opt.dataset.price) {
@@ -239,27 +228,22 @@ function bindLogForm() {
         updateLogPreview();
     };
 
-    // Events
     typeSelect.addEventListener('change', syncPrice);
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
-
-    // *** FIX: Run syncPrice immediately to fill the field on load ***
+    
+    // Initial sync
     syncPrice();
 
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('date').value;
         const kwh = parseFloat(kwhInput.value);
-        
-        // Ensure we try to get price one last time if input is empty
         if (!priceInput.value) syncPrice();
         const price = parseFloat(priceInput.value);
-        
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
 
         if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields (Check Price or Date)');
-        
         const entryData = { date, kwh, price, type, note, total: kwh * price };
 
         if (State.editLogId) {
@@ -344,7 +328,6 @@ function renderLogList() {
             btn.innerText = "Update Entry";
             btn.classList.add("update-mode-btn");
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
-            // Call syncPrice manually here as well would be good, but UI will act correctly due to events
             updateLogPreview();
         });
     });
@@ -358,10 +341,8 @@ function bindCostsForm() {
         const cat = document.getElementById('c_category').value;
         const note = document.getElementById('c_note').value;
         const target = document.getElementById('c_target').value;
-
         if(!date || !amount) return alert('Enter amount and date');
         const entryData = { date, amount, cat, note, target };
-
         if (State.editCostId) {
             dbUpdateCost(State.editCostId, entryData);
             State.editCostId = null;
@@ -398,7 +379,6 @@ function renderCostsList() {
         </div>`;
     });
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма разходи</p>';
-    
     State.costs.forEach(c => {
         document.getElementById(`del-cost-${c.id}`).addEventListener('click', () => {
             if(confirm('Delete?')) dbDeleteCost(c.id);
@@ -421,21 +401,18 @@ function renderCostsList() {
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
-    
     btnEv.addEventListener('click', () => {
         State.currentGarageTab = 'ev';
         btnEv.classList.add('active'); btnIce.classList.remove('active');
         document.getElementById('garage-title').innerText = '🔔 Напомняния (EV)';
         loadGarageDataToUI();
     });
-    
     btnIce.addEventListener('click', () => {
         State.currentGarageTab = 'ice';
         btnIce.classList.add('active'); btnEv.classList.remove('active');
         document.getElementById('garage-title').innerText = '🔔 Напомняния (ICE)';
         loadGarageDataToUI();
     });
-
     document.getElementById('saveGarageManual').addEventListener('click', () => {
         const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
         let dataToSave = {};
@@ -477,15 +454,8 @@ function bindSettings() {
         };
         dbSaveSettings(s);
     });
-
-    // Export Buttons
-    document.getElementById('btnExportLogs').addEventListener('click', () => {
-        exportToCSV(State.logs, 'EV_Logs.csv');
-    });
-    
-    document.getElementById('btnExportCosts').addEventListener('click', () => {
-        exportToCSV(State.costs, 'EV_Costs.csv');
-    });
+    document.getElementById('btnExportLogs').addEventListener('click', () => exportToCSV(State.logs, 'EV_Logs.csv'));
+    document.getElementById('btnExportCosts').addEventListener('click', () => exportToCSV(State.costs, 'EV_Costs.csv'));
 }
 
 function loadSettingsToUI() {
@@ -508,6 +478,23 @@ function bindCompare() {
                 <div>EV: £${evC.toFixed(2)} vs ICE: £${iceC.toFixed(2)}</div>
                 <div style="font-weight:bold; color:${diff>0?'#4CAF50':'#f44336'}">${diff>0?'Save':'Loss'} £${Math.abs(diff).toFixed(2)}</div>
             </div>`;
+    });
+}
+
+function bindChartControls() {
+    const bCum = document.getElementById('btn-chart-cum');
+    const bMonth = document.getElementById('btn-chart-month');
+    
+    bCum.addEventListener('click', () => {
+        State.chartMode = 'cumulative';
+        bCum.classList.add('active'); bMonth.classList.remove('active');
+        renderChart();
+    });
+    
+    bMonth.addEventListener('click', () => {
+        State.chartMode = 'monthly';
+        bMonth.classList.add('active'); bCum.classList.remove('active');
+        renderChart();
     });
 }
 
@@ -556,29 +543,80 @@ function updateStats() {
 function renderChart() {
     const ctx = document.getElementById('tcoChart');
     if(!ctx) return;
-    let events = [];
-    State.logs.forEach(l => events.push({ date: l.date, ev: (l.total||l.kwh*l.price), ice: (l.kwh*State.settings.evEff/State.settings.iceMpg)*4.54609*State.settings.fuelPrice }));
-    State.costs.forEach(c => events.push({ date: c.date, ev: (c.target!=='ice'?parseFloat(c.amount):0), ice: (c.target==='ice'?parseFloat(c.amount):0) }));
-    events.sort((a,b) => new Date(a.date) - new Date(b.date));
-    let labels=[], dEv=[], dIce=[], cEv=0, cIce=0;
-    events.forEach(e => {
-        cEv += e.ev; cIce += e.ice;
-        labels.push(e.date); dEv.push(cEv); dIce.push(cIce);
-    });
     if(window.myChart) window.myChart.destroy();
+
+    // 1. DATA PREPARATION
+    let dataSets = [], labels = [];
+
+    if (State.chartMode === 'cumulative') {
+        // --- OLD CUMULATIVE LOGIC ---
+        let events = [];
+        State.logs.forEach(l => events.push({ date: l.date, ev: (l.total||l.kwh*l.price), ice: (l.kwh*State.settings.evEff/State.settings.iceMpg)*4.54609*State.settings.fuelPrice }));
+        State.costs.forEach(c => events.push({ date: c.date, ev: (c.target!=='ice'?parseFloat(c.amount):0), ice: (c.target==='ice'?parseFloat(c.amount):0) }));
+        events.sort((a,b) => new Date(a.date) - new Date(b.date));
+        
+        let cEv=0, cIce=0, dEv=[], dIce=[];
+        events.forEach(e => {
+            cEv += e.ev; cIce += e.ice;
+            labels.push(e.date); dEv.push(cEv); dIce.push(cIce);
+        });
+
+        dataSets = [
+            { label: 'ICE (Cumul)', data: dIce, borderColor: '#f44336', backgroundColor: '#f44336', fill: false, pointRadius: 0, type: 'line' },
+            { label: 'EV (Cumul)', data: dEv, borderColor: '#4CAF50', backgroundColor: '#4CAF50', fill: false, pointRadius: 0, type: 'line' }
+        ];
+
+    } else {
+        // --- NEW MONTHLY LOGIC ---
+        let monthly = {}; // "2024-01": { ev:0, ice:0 }
+        
+        // Add Logs (Charging)
+        State.logs.forEach(l => {
+            const m = l.date.substring(0, 7); // YYYY-MM
+            if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
+            monthly[m].ev += (l.total || l.kwh*l.price);
+            monthly[m].ice += (l.kwh * State.settings.evEff / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
+        });
+
+        // Add Costs (Maintenance)
+        State.costs.forEach(c => {
+            const m = c.date.substring(0, 7);
+            if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
+            if(c.target === 'ice') monthly[m].ice += parseFloat(c.amount);
+            else monthly[m].ev += parseFloat(c.amount);
+        });
+
+        // Sort Months
+        labels = Object.keys(monthly).sort();
+        let dEv = [], dIce = [];
+        labels.forEach(m => {
+            dEv.push(monthly[m].ev);
+            dIce.push(monthly[m].ice);
+        });
+
+        dataSets = [
+            { label: 'ICE Cost', data: dIce, backgroundColor: '#f44336', borderColor: '#f44336', borderWidth: 1 },
+            { label: 'EV Cost', data: dEv, backgroundColor: '#4CAF50', borderColor: '#4CAF50', borderWidth: 1 }
+        ];
+    }
+
+    // 2. RENDER CHART
     window.myChart = new Chart(ctx, {
-        type: 'line',
+        type: State.chartMode === 'cumulative' ? 'line' : 'bar',
         data: {
             labels: labels,
-            datasets: [
-                { label: 'ICE', data: dIce, borderColor: '#f44336', fill: false, pointRadius: 0 },
-                { label: 'EV', data: dEv, borderColor: '#4CAF50', fill: false, pointRadius: 0 }
-            ]
+            datasets: dataSets
         },
         options: { 
-            responsive: true, maintainAspectRatio: false,
-            scales: { x: { display: false }, y: { grid: { color: '#333' } } },
-            plugins: { legend: { display: false } }
+            responsive: true, 
+            maintainAspectRatio: false,
+            scales: { 
+                x: { display: State.chartMode !== 'cumulative' }, // Hide X dates in line mode to avoid clutter
+                y: { grid: { color: '#333' } } 
+            },
+            plugins: { 
+                legend: { display: true, labels: { color: '#ccc' } } 
+            }
         }
     });
 }
