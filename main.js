@@ -1,4 +1,4 @@
-/* main.js - Version: Home Dashboard + Monthly Charts */
+/* main.js - Version: Import/Restore Feature Added */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -84,7 +84,7 @@ function initDataListeners() {
         snapshot.forEach((doc) => State.logs.push({ id: doc.id, ...doc.data() }));
         State.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
         renderLogList();
-        renderHomeDashboard(); // <--- NEW: Update dashboard when logs change
+        renderHomeDashboard();
         updateStats();
     });
 
@@ -137,7 +137,7 @@ async function dbSaveSettings(settings) {
     try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
 }
 
-// --- EXPORT ---
+// --- IMPORT / EXPORT FUNCTIONS ---
 function exportToCSV(data, filename) {
     if (!data || !data.length) { alert("Няма данни."); return; }
     let headers = [];
@@ -172,6 +172,94 @@ function exportToCSV(data, filename) {
     document.body.removeChild(link);
 }
 
+// Simple CSV Parser that handles quotes
+function parseCSV(text) {
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    if(lines.length < 2) return []; // Need header + data
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const result = [];
+
+    // Skip header, loop rows
+    for(let i=1; i<lines.length; i++) {
+        let row = [];
+        let currentToken = '';
+        let insideQuote = false;
+        
+        // Character by character parsing to handle commas inside quotes
+        for(let char of lines[i]) {
+            if(char === '"') {
+                insideQuote = !insideQuote;
+            } else if(char === ',' && !insideQuote) {
+                row.push(currentToken);
+                currentToken = '';
+            } else {
+                currentToken += char;
+            }
+        }
+        row.push(currentToken); // Last token
+        
+        // Clean up quotes from values
+        row = row.map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+        
+        // Map to object based on headers
+        let obj = {};
+        headers.forEach((h, index) => {
+            if(row[index] !== undefined) obj[h] = row[index];
+        });
+        result.push(obj);
+    }
+    return { type: headers.includes('KWh') ? 'logs' : 'costs', data: result };
+}
+
+async function importFromCSV(file) {
+    if(!file) return alert("Избери файл.");
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+        try {
+            const text = e.target.result;
+            const parsed = parseCSV(text);
+            
+            if(!parsed.data.length) return alert("Празен или невалиден файл.");
+            
+            if(!confirm(`Открити са ${parsed.data.length} записа (${parsed.type}). Да ги добавя ли?`)) return;
+
+            let count = 0;
+            if(parsed.type === 'logs') {
+                for(let row of parsed.data) {
+                    await dbAddLog({
+                        date: row.Date,
+                        type: row.Type,
+                        kwh: parseFloat(row.KWh),
+                        price: parseFloat(row.Price),
+                        total: parseFloat(row.Total),
+                        note: row.Note
+                    });
+                    count++;
+                }
+            } else {
+                for(let row of parsed.data) {
+                    await dbAddCost({
+                        date: row.Date,
+                        amount: parseFloat(row.Amount),
+                        cat: row.Category,
+                        target: row.Target,
+                        note: row.Note
+                    });
+                    count++;
+                }
+            }
+            alert(`Успешно добавени ${count} записа!`);
+            document.getElementById('importFile').value = ''; // Reset input
+        } catch(err) {
+            alert("Грешка при импорт: " + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+
 // --- UI LOGIC ---
 
 function initUI() {
@@ -202,7 +290,6 @@ function bindNav() {
     });
 }
 
-// *** NEW FUNCTION: HOME DASHBOARD ***
 function renderHomeDashboard() {
     const div = document.getElementById('home-stats');
     if(!div) return;
@@ -212,18 +299,14 @@ function renderHomeDashboard() {
         return;
     }
 
-    // 1. Calculate This Month's Cost & kWh
     const now = new Date();
-    const currentMonthKey = now.toISOString().slice(0, 7); // "2024-01"
+    const currentMonthKey = now.toISOString().slice(0, 7); 
     
     const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
     const monthCost = monthLogs.reduce((sum, l) => sum + (l.total || l.kwh * l.price), 0);
     const monthKwh = monthLogs.reduce((sum, l) => sum + l.kwh, 0);
 
-    // 2. Calculate Days Since Last Charge
-    // Logs are sorted descending, so logs[0] is the newest
     const lastLogDate = new Date(State.logs[0].date);
-    // Reset time to midnight for accurate day diff
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const logMidnight = new Date(lastLogDate.getFullYear(), lastLogDate.getMonth(), lastLogDate.getDate());
     
@@ -234,20 +317,17 @@ function renderHomeDashboard() {
     if(diffDays === 1) daysText = "Вчера";
     if(diffDays > 1) daysText = `${diffDays} дни`;
 
-    // 3. Render
     div.innerHTML = `
         <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #4CAF50;">
             <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Този Месец</div>
             <div style="font-size:1.4em; font-weight:bold; color:#fff;">£${monthCost.toFixed(2)}</div>
             <div style="font-size:0.8em; color:#888;">${monthKwh.toFixed(0)} kWh</div>
         </div>
-
         <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #2196F3;">
             <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Последно</div>
             <div style="font-size:1.4em; font-weight:bold; color:#fff;">${daysText}</div>
             <div style="font-size:0.8em; color:#888;">${State.logs[0].date}</div>
-        </div>
-    `;
+        </div>`;
 }
 
 function bindLogForm() {
@@ -489,6 +569,12 @@ function bindSettings() {
     });
     document.getElementById('btnExportLogs').addEventListener('click', () => exportToCSV(State.logs, 'EV_Logs.csv'));
     document.getElementById('btnExportCosts').addEventListener('click', () => exportToCSV(State.costs, 'EV_Costs.csv'));
+    
+    // IMPORT BINDING
+    document.getElementById('btnImport').addEventListener('click', () => {
+        const fileInput = document.getElementById('importFile');
+        importFromCSV(fileInput.files[0]);
+    });
 }
 
 function bindCompare() {
@@ -510,18 +596,8 @@ function bindCompare() {
 function bindChartControls() {
     const bCum = document.getElementById('btn-chart-cum');
     const bMonth = document.getElementById('btn-chart-month');
-    
-    bCum.addEventListener('click', () => {
-        State.chartMode = 'cumulative';
-        bCum.classList.add('active'); bMonth.classList.remove('active');
-        renderChart();
-    });
-    
-    bMonth.addEventListener('click', () => {
-        State.chartMode = 'monthly';
-        bMonth.classList.add('active'); bCum.classList.remove('active');
-        renderChart();
-    });
+    bCum.addEventListener('click', () => { State.chartMode = 'cumulative'; bCum.classList.add('active'); bMonth.classList.remove('active'); renderChart(); });
+    bMonth.addEventListener('click', () => { State.chartMode = 'monthly'; bMonth.classList.add('active'); bCum.classList.remove('active'); renderChart(); });
 }
 
 function updateStats() {
@@ -571,11 +647,9 @@ function renderChart() {
     if(!ctx) return;
     if(window.myChart) window.myChart.destroy();
 
-    // 1. DATA PREPARATION
     let dataSets = [], labels = [];
 
     if (State.chartMode === 'cumulative') {
-        // --- OLD CUMULATIVE LOGIC ---
         let events = [];
         State.logs.forEach(l => events.push({ date: l.date, ev: (l.total||l.kwh*l.price), ice: (l.kwh*State.settings.evEff/State.settings.iceMpg)*4.54609*State.settings.fuelPrice }));
         State.costs.forEach(c => events.push({ date: c.date, ev: (c.target!=='ice'?parseFloat(c.amount):0), ice: (c.target==='ice'?parseFloat(c.amount):0) }));
@@ -593,8 +667,7 @@ function renderChart() {
         ];
 
     } else {
-        // --- NEW MONTHLY LOGIC ---
-        let monthly = {}; // "2024-01": { ev:0, ice:0 }
+        let monthly = {}; 
         
         State.logs.forEach(l => {
             const m = l.date.substring(0, 7);
