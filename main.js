@@ -1,4 +1,4 @@
-/* main.js - Version: Import/Restore Feature Added */
+/* main.js - Version: Odometer & Distance Calculation */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -77,12 +77,12 @@ let unsubscribeLogs, unsubscribeCosts, unsubscribeGarage, unsubscribeSettings;
 function initDataListeners() {
     const uid = State.user.uid;
 
-    // Logs
+    // Logs - Sort Descending (Newest first) is crucial for Odo math
     const qLogs = query(collection(db, "logs"), where("uid", "==", uid));
     unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
         State.logs = [];
         snapshot.forEach((doc) => State.logs.push({ id: doc.id, ...doc.data() }));
-        State.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        State.logs.sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest first
         renderLogList();
         renderHomeDashboard();
         updateStats();
@@ -141,7 +141,7 @@ async function dbSaveSettings(settings) {
 function exportToCSV(data, filename) {
     if (!data || !data.length) { alert("Няма данни."); return; }
     let headers = [];
-    if(filename.includes("Logs")) headers = ["Date", "Type", "KWh", "Price", "Total", "Note"];
+    if(filename.includes("Logs")) headers = ["Date", "Odometer", "Type", "KWh", "Price", "Total", "Note"]; // Added Odometer
     else headers = ["Date", "Amount", "Category", "Target", "Note"];
 
     let csvContent = headers.join(",") + "\n";
@@ -149,7 +149,7 @@ function exportToCSV(data, filename) {
         let rowStr = "";
         if(filename.includes("Logs")) {
             rowStr = [
-                row.date, `"${row.type}"`, row.kwh, row.price,
+                row.date, row.odo || '', `"${row.type}"`, row.kwh, row.price,
                 (row.total || (row.kwh*row.price)).toFixed(2),
                 `"${(row.note || '').replace(/"/g, '""')}"`
             ].join(",");
@@ -172,41 +172,29 @@ function exportToCSV(data, filename) {
     document.body.removeChild(link);
 }
 
-// Simple CSV Parser that handles quotes
+// CSV Parser
 function parseCSV(text) {
     const lines = text.split('\n').filter(l => l.trim() !== '');
-    if(lines.length < 2) return []; // Need header + data
+    if(lines.length < 2) return [];
     
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const result = [];
 
-    // Skip header, loop rows
     for(let i=1; i<lines.length; i++) {
         let row = [];
         let currentToken = '';
         let insideQuote = false;
         
-        // Character by character parsing to handle commas inside quotes
         for(let char of lines[i]) {
-            if(char === '"') {
-                insideQuote = !insideQuote;
-            } else if(char === ',' && !insideQuote) {
-                row.push(currentToken);
-                currentToken = '';
-            } else {
-                currentToken += char;
-            }
+            if(char === '"') { insideQuote = !insideQuote; } 
+            else if(char === ',' && !insideQuote) { row.push(currentToken); currentToken = ''; } 
+            else { currentToken += char; }
         }
-        row.push(currentToken); // Last token
-        
-        // Clean up quotes from values
+        row.push(currentToken);
         row = row.map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
         
-        // Map to object based on headers
         let obj = {};
-        headers.forEach((h, index) => {
-            if(row[index] !== undefined) obj[h] = row[index];
-        });
+        headers.forEach((h, index) => { if(row[index] !== undefined) obj[h] = row[index]; });
         result.push(obj);
     }
     return { type: headers.includes('KWh') ? 'logs' : 'costs', data: result };
@@ -215,14 +203,11 @@ function parseCSV(text) {
 async function importFromCSV(file) {
     if(!file) return alert("Избери файл.");
     const reader = new FileReader();
-    
     reader.onload = async (e) => {
         try {
             const text = e.target.result;
             const parsed = parseCSV(text);
-            
             if(!parsed.data.length) return alert("Празен или невалиден файл.");
-            
             if(!confirm(`Открити са ${parsed.data.length} записа (${parsed.type}). Да ги добавя ли?`)) return;
 
             let count = 0;
@@ -234,7 +219,8 @@ async function importFromCSV(file) {
                         kwh: parseFloat(row.KWh),
                         price: parseFloat(row.Price),
                         total: parseFloat(row.Total),
-                        note: row.Note
+                        note: row.Note,
+                        odo: row.Odometer ? parseFloat(row.Odometer) : null
                     });
                     count++;
                 }
@@ -251,10 +237,8 @@ async function importFromCSV(file) {
                 }
             }
             alert(`Успешно добавени ${count} записа!`);
-            document.getElementById('importFile').value = ''; // Reset input
-        } catch(err) {
-            alert("Грешка при импорт: " + err.message);
-        }
+            document.getElementById('importFile').value = '';
+        } catch(err) { alert("Грешка при импорт: " + err.message); }
     };
     reader.readAsText(file);
 }
@@ -301,7 +285,6 @@ function renderHomeDashboard() {
 
     const now = new Date();
     const currentMonthKey = now.toISOString().slice(0, 7); 
-    
     const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
     const monthCost = monthLogs.reduce((sum, l) => sum + (l.total || l.kwh * l.price), 0);
     const monthKwh = monthLogs.reduce((sum, l) => sum + l.kwh, 0);
@@ -335,6 +318,7 @@ function bindLogForm() {
     const typeSelect = document.getElementById('type');
     const priceInput = document.getElementById('price');
     const kwhInput = document.getElementById('kwh');
+    const odoInput = document.getElementById('odo');
     
     const syncPrice = () => {
         const opt = typeSelect.options[typeSelect.selectedIndex];
@@ -363,9 +347,10 @@ function bindLogForm() {
         const price = parseFloat(priceInput.value);
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
+        const odo = odoInput.value ? parseFloat(odoInput.value) : null;
 
         if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields');
-        const entryData = { date, kwh, price, type, note, total: kwh * price };
+        const entryData = { date, kwh, price, type, note, odo, total: kwh * price };
 
         if (State.editLogId) {
             dbUpdateLog(State.editLogId, entryData);
@@ -376,6 +361,7 @@ function bindLogForm() {
             dbAddLog(entryData);
         }
         kwhInput.value = '';
+        odoInput.value = ''; // Clear odo
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
     });
@@ -409,8 +395,31 @@ function updateLogPreview() {
 function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
-    State.logs.forEach(l => {
+    
+    // Iterate through logs to calculate distance based on previous entry
+    for(let i = 0; i < State.logs.length; i++) {
+        const l = State.logs[i];
         const cost = l.total || (l.kwh * l.price);
+        
+        // Calculate Distance if Odo exists and we have a previous log (which is i+1 because sorted Newest->Oldest)
+        let distanceHtml = '';
+        if (l.odo) {
+            let dist = 0;
+            // Look for the next available odometer reading in older logs
+            for(let j = i + 1; j < State.logs.length; j++) {
+                if(State.logs[j].odo) {
+                    dist = l.odo - State.logs[j].odo;
+                    break;
+                }
+            }
+            
+            if(dist > 0) {
+                distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9em; margin-right:10px;">+${dist} mi</span>`;
+            } else {
+                distanceHtml = `<span style="color:#666; font-size:0.9em; margin-right:10px;">${l.odo} mi</span>`;
+            }
+        }
+
         html += `
         <div class="log-entry" id="log-row-${l.id}">
             <div class="log-info">
@@ -419,7 +428,8 @@ function renderLogList() {
                     <span class="cost-tag">£${cost.toFixed(2)}</span>
                 </div>
                 <div class="log-sub-row">
-                    <span>${l.date}</span><span>•</span><span>${l.type}</span>
+                    ${distanceHtml}
+                    <span>${l.date}</span><span> • </span><span>${l.type}</span>
                 </div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
             </div>
@@ -428,9 +438,10 @@ function renderLogList() {
                 <button class="delete-btn" id="del-log-${l.id}">×</button>
             </div>
         </div>`;
-    });
+    }
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
+    // Attach Event Listeners
     State.logs.forEach(l => {
         document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Delete?')) dbDeleteLog(l.id); });
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
@@ -438,6 +449,7 @@ function renderLogList() {
             document.getElementById('kwh').value = l.kwh;
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
+            document.getElementById('odo').value = l.odo || ''; // Load Odo
             const sel = document.getElementById('type');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; } }
             State.editLogId = l.id;
