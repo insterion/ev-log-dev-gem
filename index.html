@@ -35,12 +35,24 @@
         <button class="tabbtn" data-tab="settings">Settings</button>
       </nav>
 
-      <section id="log" class="tab active">
+  <section id="log" class="tab active">
+        
         <div id="home-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
             </div>
 
         <h3>Добави Зареждане</h3>
-        <div class="input-group"><label>Дата</label><input type="date" id="date"></div>
+        
+        <div style="display:flex; gap:10px;">
+            <div class="input-group" style="flex:1;">
+                <label>Дата</label>
+                <input type="date" id="date">
+            </div>
+            <div class="input-group" style="flex:1;">
+                <label>Километраж (mi)</label>
+                <input type="number" id="odo" placeholder="ex. 12500">
+            </div>
+        </div>
+
         <div class="input-group">
             <label>Тип</label>
             <select id="type">
@@ -50,14 +62,30 @@
                 <option value="work" data-price="0.00">Служебно (0.00)</option>
             </select>
         </div>
-        <div class="input-group"><label>Заредено (kWh)</label><input type="number" id="kwh" placeholder="ex. 45.5" step="0.1"></div>
-        <div class="input-group"><label>Цена (£/kWh)</label><input type="number" id="price" step="0.01" placeholder="0.56"></div>
+
+        <div class="input-group">
+            <label>Заредено (kWh)</label>
+            <input type="number" id="kwh" placeholder="ex. 45.5" step="0.1">
+        </div>
+
+        <div class="input-group">
+            <label>Цена (£/kWh)</label>
+            <input type="number" id="price" step="0.01" placeholder="0.56">
+        </div>
+
         <div id="log-preview" style="margin-bottom:15px; display:none;"></div>
-        <div class="input-group"><label>Бележка (Optional)</label><input type="text" id="note" placeholder="ex. Lidl charging"></div>
+
+        <div class="input-group">
+            <label>Бележка (Optional)</label>
+            <input type="text" id="note" placeholder="ex. Lidl charging">
+        </div>
+
         <button id="addEntry">Add Entry</button>
 
         <h3>История</h3>
-        <div id="logTable"><p>Loading...</p></div>
+        <div id="logTable">
+            <p>Loading...</p>
+        </div>
       </section>
 
       <section id="costs" class="tab">
