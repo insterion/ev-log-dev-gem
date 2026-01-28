@@ -320,17 +320,22 @@ function bindLogForm() {
     const kwhInput = document.getElementById('kwh');
     const odoInput = document.getElementById('odo');
     
+    // ПОПРАВКА: Тази функция вече само ПРЕДЛАГА цена, но не заключва полето
     const syncPrice = () => {
         const opt = typeSelect.options[typeSelect.selectedIndex];
+        // Ако сме в режим на редакция (Edit), не пипай цената, която потребителят е въвел
+        if (btnAdd.classList.contains("update-mode-btn")) return;
+
         if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
-            priceInput.setAttribute('readonly', true);
-            priceInput.style.opacity = "0.7";
-            priceInput.style.background = "#333";
+            // ПРЕМАХНАТО: priceInput.setAttribute('readonly', true); -> Вече може да се пише
+            // Връщаме нормалния вид на полето
+            priceInput.style.opacity = "1";
+            priceInput.style.background = "#2c2c2c"; // Стандартния цвят
         } else {
             priceInput.removeAttribute('readonly');
             priceInput.style.opacity = "1";
-            priceInput.style.background = "#222";
+            priceInput.style.background = "#2c2c2c";
         }
         updateLogPreview();
     };
@@ -338,12 +343,17 @@ function bindLogForm() {
     typeSelect.addEventListener('change', syncPrice);
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
-    syncPrice();
+    
+    // Първоначално зареждане, ако полето е празно
+    if(!priceInput.value) syncPrice();
 
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('date').value;
         const kwh = parseFloat(kwhInput.value);
+        
+        // Ако потребителят е изтрил цената, сложи тази по подразбиране
         if (!priceInput.value) syncPrice();
+        
         const price = parseFloat(priceInput.value);
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
@@ -360,10 +370,15 @@ function bindLogForm() {
         } else {
             dbAddLog(entryData);
         }
+        
+        // Изчистване на полетата след запис
         kwhInput.value = '';
-        odoInput.value = ''; // Clear odo
+        odoInput.value = ''; 
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
+        
+        // Връщаме цената към default за следващия запис
+        syncPrice(); 
     });
 }
 
