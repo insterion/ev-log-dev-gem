@@ -411,16 +411,21 @@ function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
     
-    // Iterate through logs to calculate distance based on previous entry
+    // Сортираме данните (най-новите най-отгоре), ако случайно не са
+    // State.logs.sort((a, b) => new Date(b.date) - new Date(a.date)); 
+    
+    // Iterate through logs
     for(let i = 0; i < State.logs.length; i++) {
         const l = State.logs[i];
         const cost = l.total || (l.kwh * l.price);
         
-        // Calculate Distance if Odo exists and we have a previous log (which is i+1 because sorted Newest->Oldest)
+        // --- ЛОГИКА ЗА ДИСТАНЦИЯ И ЕФЕКТИВНОСТ ---
         let distanceHtml = '';
+        let effHtml = '';
+
         if (l.odo) {
             let dist = 0;
-            // Look for the next available odometer reading in older logs
+            // Търсим следващия (по-стар) запис, който има одометър
             for(let j = i + 1; j < State.logs.length; j++) {
                 if(State.logs[j].odo) {
                     dist = l.odo - State.logs[j].odo;
@@ -429,11 +434,28 @@ function renderLogList() {
             }
             
             if(dist > 0) {
-                distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9em; margin-right:10px;">+${dist} mi</span>`;
+                // 1. Показваме дистанцията
+                distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9rem; margin-right:8px;">+${dist} mi</span>`;
+                
+                // 2. Смятаме ефективност (mi/kWh)
+                // Формула: Изминати мили / Заредени сега kWh
+                // *Забележка: Това е "Real World" сметка - колко си заредил, за да компенсираш минатото.
+                const efficiency = dist / l.kwh;
+                
+                // Оцветяване според ефективността
+                let effColor = '#888'; // сиво (стандартно)
+                if(efficiency > 4.0) effColor = '#4CAF50'; // зелено (супер икономично)
+                else if(efficiency < 2.5) effColor = '#f44336'; // червено (висок разход)
+                
+                effHtml = `<span style="color:${effColor}; font-size:0.8rem; background:#222; padding:2px 6px; border-radius:4px; margin-right:8px;">
+                    ${efficiency.toFixed(1)} mi/kWh
+                </span>`;
             } else {
+                // Ако няма разлика или е първи запис
                 distanceHtml = `<span style="color:#666; font-size:0.9em; margin-right:10px;">${l.odo} mi</span>`;
             }
         }
+        // ------------------------------------------
 
         html += `
         <div class="log-entry" id="log-row-${l.id}">
@@ -444,6 +466,9 @@ function renderLogList() {
                 </div>
                 <div class="log-sub-row">
                     ${distanceHtml}
+                    ${effHtml}
+                </div>
+                <div class="log-sub-row" style="margin-top:2px;">
                     <span>${l.date}</span><span> • </span><span>${l.type}</span>
                 </div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
@@ -456,7 +481,7 @@ function renderLogList() {
     }
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
-    // Attach Event Listeners
+    // Attach Event Listeners (за триене и редакция)
     State.logs.forEach(l => {
         document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Delete?')) dbDeleteLog(l.id); });
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
@@ -464,15 +489,19 @@ function renderLogList() {
             document.getElementById('kwh').value = l.kwh;
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
-            document.getElementById('odo').value = l.odo || ''; // Load Odo
+            document.getElementById('odo').value = l.odo || ''; 
             const sel = document.getElementById('type');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; } }
+            
             State.editLogId = l.id;
             const btn = document.getElementById('addEntry');
             btn.innerText = "Update Entry";
             btn.classList.add("update-mode-btn");
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
-            updateLogPreview();
+            
+            // Trigger preview update manually
+            const event = new Event('input');
+            document.getElementById('kwh').dispatchEvent(event);
         });
     });
 }
