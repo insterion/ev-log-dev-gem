@@ -274,6 +274,7 @@ function bindNav() {
     });
 }
 
+// *** UPGRADED HOME DASHBOARD (With Miles & Efficiency) ***
 function renderHomeDashboard() {
     const div = document.getElementById('home-stats');
     if(!div) return;
@@ -283,34 +284,73 @@ function renderHomeDashboard() {
         return;
     }
 
+    // 1. Current Month Filter
     const now = new Date();
-    const currentMonthKey = now.toISOString().slice(0, 7); 
+    const currentMonthKey = now.toISOString().slice(0, 7); // "2024-02"
+    
+    // Взимаме само записите за този месец
     const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
-    const monthCost = monthLogs.reduce((sum, l) => sum + (l.total || l.kwh * l.price), 0);
-    const monthKwh = monthLogs.reduce((sum, l) => sum + l.kwh, 0);
+    
+    // 2. Calculate Totals
+    let totalCost = 0;
+    let totalKwh = 0;
+    let totalDist = 0;
 
+    monthLogs.forEach(l => {
+        totalCost += (l.total || l.kwh * l.price);
+        totalKwh += l.kwh;
+
+        // Смятане на дистанция за всеки запис от месеца
+        if(l.odo) {
+             // Търсим предходния запис в ЦЯЛАТА история (не само в месеца)
+             const currentIndex = State.logs.findIndex(x => x.id === l.id);
+             if(currentIndex !== -1) {
+                 for(let j = currentIndex + 1; j < State.logs.length; j++) {
+                     if(State.logs[j].odo) {
+                         totalDist += (l.odo - State.logs[j].odo);
+                         break;
+                     }
+                 }
+             }
+        }
+    });
+
+    // Calculate Efficiency (Avoid division by zero)
+    const avgEff = totalKwh > 0 && totalDist > 0 ? (totalDist / totalKwh).toFixed(1) : "---";
+
+    // 3. Last Charge Logic
     const lastLogDate = new Date(State.logs[0].date);
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const logMidnight = new Date(lastLogDate.getFullYear(), lastLogDate.getMonth(), lastLogDate.getDate());
-    
     const diffTime = Math.abs(todayMidnight - logMidnight);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    
     let daysText = "Днес";
     if(diffDays === 1) daysText = "Вчера";
     if(diffDays > 1) daysText = `${diffDays} дни`;
 
+    // 4. Render HTML
     div.innerHTML = `
-        <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #4CAF50;">
-            <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Този Месец</div>
-            <div style="font-size:1.4em; font-weight:bold; color:#fff;">£${monthCost.toFixed(2)}</div>
-            <div style="font-size:0.8em; color:#888;">${monthKwh.toFixed(0)} kWh</div>
+        <div style="background:#222; padding:15px; border-radius:12px; border-left:5px solid #4CAF50; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Този Месец</div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px;">
+                <span style="font-size:1.6rem; font-weight:800; color:#fff;">£${totalCost.toFixed(2)}</span>
+                <span style="font-size:0.9rem; color:#4CAF50; font-weight:bold;">${avgEff} <span style="font-size:0.7em; font-weight:normal; color:#888;">mi/kWh</span></span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; border-top:1px solid #333; padding-top:5px; font-size:0.85rem; color:#ccc;">
+                <span>${totalDist > 0 ? totalDist : 0} mi</span>
+                <span>${totalKwh.toFixed(0)} kWh</span>
+            </div>
         </div>
-        <div style="background:#222; padding:15px; border-radius:10px; border-left:4px solid #2196F3;">
-            <div style="font-size:0.8em; color:#aaa; margin-bottom:5px;">Последно</div>
-            <div style="font-size:1.4em; font-weight:bold; color:#fff;">${daysText}</div>
-            <div style="font-size:0.8em; color:#888;">${State.logs[0].date}</div>
-        </div>`;
+
+        <div style="background:#222; padding:15px; border-radius:12px; border-left:5px solid #2196F3; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Последно</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#fff; margin-bottom:5px;">${daysText}</div>
+            <div style="font-size:0.85rem; color:#888;">${State.logs[0].date}</div>
+            <div style="margin-top:5px; font-size:0.85rem; color:#2196F3;">${State.logs[0].odo ? State.logs[0].odo + ' mi' : ''}</div>
+        </div>
+    `;
 }
 
 function bindLogForm() {
