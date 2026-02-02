@@ -607,51 +607,127 @@ function renderCostsList() {
     });
 }
 
+// *** SMART GARAGE LOGIC (Full Replacement) ***
+
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
+    
+    // Toggle Tabs
     btnEv.addEventListener('click', () => {
         State.currentGarageTab = 'ev';
         btnEv.classList.add('active'); btnIce.classList.remove('active');
         document.getElementById('garage-title').innerText = '🔔 Напомняния (EV)';
         loadGarageDataToUI();
     });
+    
     btnIce.addEventListener('click', () => {
         State.currentGarageTab = 'ice';
         btnIce.classList.add('active'); btnEv.classList.remove('active');
         document.getElementById('garage-title').innerText = '🔔 Напомняния (ICE)';
         loadGarageDataToUI();
     });
+
+    // Save Button
     document.getElementById('saveGarageManual').addEventListener('click', () => {
-        const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
+        // Списък с ВСИЧКИ полета, които записваме
+        const ids = [
+            // Docs
+            'g_insurance', 'g_mot', 'g_tax', 'g_service', 
+            // Maintenance
+            'g_tire_date', 'g_tire_odo', 'g_tire_note',
+            'g_12v_date', 'g_filter_date', 'g_wipers_date',
+            // Info
+            'g_plate', 'g_vin', 'g_notes'
+        ];
+        
         let dataToSave = {};
-        ids.forEach(id => { const el = document.getElementById(id); if(el) dataToSave[id] = el.value; });
+        ids.forEach(id => { 
+            const el = document.getElementById(id); 
+            if(el) dataToSave[id] = el.value; 
+        });
+        
         dbSaveGarage(State.currentGarageTab, dataToSave);
     });
 }
 
 function loadGarageDataToUI() {
     const currentData = State.garage[State.currentGarageTab] || {};
-    const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_plate', 'g_vin', 'g_tyre_f', 'g_tyre_r', 'g_notes'];
-    ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = currentData[id] || ""; });
-    updateGarageStatus();
+    const ids = [
+        'g_insurance', 'g_mot', 'g_tax', 'g_service', 
+        'g_tire_date', 'g_tire_odo', 'g_tire_note',
+        'g_12v_date', 'g_filter_date', 'g_wipers_date',
+        'g_plate', 'g_vin', 'g_notes'
+    ];
+    
+    ids.forEach(id => { 
+        const el = document.getElementById(id); 
+        if(el) el.value = currentData[id] || ""; 
+    });
+    
+    // Изчисляваме статусите веднага след зареждане
+    calculateGarageStats();
 }
 
-function updateGarageStatus() {
-    const checkDate = (id, statusId) => {
-        const val = document.getElementById(id).value;
-        const el = document.getElementById(statusId);
+function calculateGarageStats() {
+    // 1. Стандартни документи (Изтичащи дати)
+    const checkExpiry = (inputId, labelId) => {
+        const val = document.getElementById(inputId).value;
+        const el = document.getElementById(labelId);
         if(!el) return;
+        
         if(!val) { el.innerText = "--"; el.className = "status-badge"; return; }
+        
         const diff = Math.ceil((new Date(val) - new Date()) / (1000 * 60 * 60 * 24)); 
-        if(diff < 0) { el.innerText = `ИЗТЕКЛО!`; el.className = "status-badge status-danger"; } 
+        
+        if(diff < 0) { el.innerText = "ИЗТЕКЛО!"; el.className = "status-badge status-danger"; } 
         else if (diff <= 30) { el.innerText = `${diff} дни`; el.className = "status-badge status-warning"; } 
         else { el.innerText = `${diff} дни`; el.className = "status-badge status-ok"; }
     };
-    checkDate('g_insurance', 'status_insurance');
-    checkDate('g_mot', 'status_mot');
-    checkDate('g_tax', 'status_tax');
-    checkDate('g_service', 'status_service');
+
+    checkExpiry('g_insurance', 'status_insurance');
+    checkExpiry('g_mot', 'status_mot');
+    checkExpiry('g_tax', 'status_tax');
+    checkExpiry('g_service', 'status_service');
+
+    // 2. ГУМИ (Пробег + Възраст)
+    const tireDiv = document.getElementById('stat_tires');
+    const tireOdo = parseFloat(document.getElementById('g_tire_odo').value) || 0;
+    const currentOdo = (State.logs.length > 0 && State.logs[0].odo) ? State.logs[0].odo : 0;
+    
+    let tireText = "";
+    if(tireOdo > 0 && currentOdo > 0) {
+        const driven = currentOdo - tireOdo;
+        tireText = `Изминати: ${driven} mi`;
+    }
+    tireDiv.innerText = tireText;
+
+    // 3. Възраст на части (Age Check)
+    const checkAge = (inputId, outputId, warnYears) => {
+        const val = document.getElementById(inputId).value;
+        const el = document.getElementById(outputId);
+        if(!val || !el) return;
+
+        const date = new Date(val);
+        const now = new Date();
+        const monthsDiff = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
+        
+        let txt = "";
+        let color = "#aaa";
+
+        if(monthsDiff < 12) txt = `${monthsDiff} мес.`;
+        else txt = `${(monthsDiff/12).toFixed(1)} г.`;
+
+        // Ако е старо (над warnYears), оцветяваме в червено
+        if (monthsDiff > (warnYears * 12)) color = "#f44336"; 
+        
+        el.innerText = `Възраст: ${txt}`;
+        el.style.color = color;
+    };
+
+    checkAge('g_12v_date', 'stat_12v', 3);      // 3 години за акумулатор
+    checkAge('g_filter_date', 'stat_filter', 2); // 2 години за филтър
+    checkAge('g_wipers_date', 'stat_wipers', 1); // 1 година за чистачки
 }
 
 function bindSettings() {
