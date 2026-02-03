@@ -450,22 +450,26 @@ function updateLogPreview() {
 function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
-    
-    // Сортираме данните (най-новите най-отгоре), ако случайно не са
-    // State.logs.sort((a, b) => new Date(b.date) - new Date(a.date)); 
-    
-    // Iterate through logs
+
+    // --- НАСТРОЙКИ ЗА СРАВНЕНИЕ (ICE) ---
+    const ICE_MPG = 45;           // Твоят разход (45 мили с 1 галон)
+    const ICE_FUEL_PRICE = 1.45;  // Цена на литър гориво
+    const LITERS_PER_GALLON = 4.54609; // Британски галон към литри
+    // ------------------------------------
+
     for(let i = 0; i < State.logs.length; i++) {
         const l = State.logs[i];
-        const cost = l.total || (l.kwh * l.price);
         
-        // --- ЛОГИКА ЗА ДИСТАНЦИЯ И ЕФЕКТИВНОСТ ---
+        // Реална цена на зареждането (ако има Total ползва него, иначе смята kWh * price)
+        const cost = l.total !== undefined ? l.total : (l.kwh * l.price);
+        
         let distanceHtml = '';
         let effHtml = '';
+        let savingsHtml = '';
 
         if (l.odo) {
             let dist = 0;
-            // Търсим следващия (по-стар) запис, който има одометър
+            // Търсим предишен запис, за да видим колко сме минали
             for(let j = i + 1; j < State.logs.length; j++) {
                 if(State.logs[j].odo) {
                     dist = l.odo - State.logs[j].odo;
@@ -474,28 +478,40 @@ function renderLogList() {
             }
             
             if(dist > 0) {
-                // 1. Показваме дистанцията
-                distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9rem; margin-right:8px;">+${dist} mi</span>`;
-                
-                // 2. Смятаме ефективност (mi/kWh)
-                // Формула: Изминати мили / Заредени сега kWh
-                // *Забележка: Това е "Real World" сметка - колко си заредил, за да компенсираш минатото.
+                // 1. Ефективност (mi/kWh)
                 const efficiency = dist / l.kwh;
                 
-                // Оцветяване според ефективността
-                let effColor = '#888'; // сиво (стандартно)
-                if(efficiency > 4.0) effColor = '#4CAF50'; // зелено (супер икономично)
-                else if(efficiency < 2.5) effColor = '#f44336'; // червено (висок разход)
+                // Цвят за ефективността
+                let effColor = '#888'; 
+                if(efficiency > 4.0) effColor = '#4CAF50'; 
+                else if(efficiency < 2.5) effColor = '#f44336'; 
                 
-                effHtml = `<span style="color:${effColor}; font-size:0.8rem; background:#222; padding:2px 6px; border-radius:4px; margin-right:8px;">
-                    ${efficiency.toFixed(1)} mi/kWh
-                </span>`;
+                distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9rem; margin-right:8px;">+${dist} mi</span>`;
+                effHtml = `<span style="color:${effColor}; font-size:0.8rem; background:#222; padding:2px 6px; border-radius:4px; margin-right:8px;">${efficiency.toFixed(1)} mi/kWh</span>`;
+
+                // 2. СМЕТКА: СПЕСТЯВАНЕ СПРЯМО ДВГ (45 MPG)
+                // Колко галона би изгорила ДВГ колата за тези мили?
+                const gallonsNeeded = dist / ICE_MPG;
+                // Колко литра са това?
+                const litersNeeded = gallonsNeeded * LITERS_PER_GALLON;
+                // Колко би струвал бензинът?
+                const iceCost = litersNeeded * ICE_FUEL_PRICE;
+                
+                // Разликата (Ако Бензин > Ток = Спестяваме)
+                const savings = iceCost - cost;
+
+                if (savings >= 0) {
+                    // Зелено (Спестено)
+                    savingsHtml = `<span style="color:#4CAF50; font-weight:bold; font-size:0.85rem;">SAVE £${savings.toFixed(2)}</span>`;
+                } else {
+                    // Червено (Загуба)
+                    savingsHtml = `<span style="color:#f44336; font-weight:bold; font-size:0.85rem;">LOSS £${Math.abs(savings).toFixed(2)}</span>`;
+                }
+
             } else {
-                // Ако няма разлика или е първи запис
                 distanceHtml = `<span style="color:#666; font-size:0.9em; margin-right:10px;">${l.odo} mi</span>`;
             }
         }
-        // ------------------------------------------
 
         html += `
         <div class="log-entry" id="log-row-${l.id}">
@@ -504,15 +520,18 @@ function renderLogList() {
                     <span>${l.kwh} kWh</span>
                     <span class="cost-tag">£${cost.toFixed(2)}</span>
                 </div>
-                <div class="log-sub-row">
+                
+                <div class="log-sub-row" style="margin-top:6px; align-items:center; flex-wrap:wrap;">
                     ${distanceHtml}
                     ${effHtml}
-                </div>
-                <div class="log-sub-row" style="margin-top:2px;">
+                    ${savingsHtml}  </div>
+
+                <div class="log-sub-row" style="margin-top:4px;">
                     <span>${l.date}</span><span> • </span><span>${l.type}</span>
                 </div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
             </div>
+            
             <div class="action-btn-group">
                 <button class="edit-btn" id="edit-log-${l.id}">✎</button>
                 <button class="delete-btn" id="del-log-${l.id}">×</button>
@@ -521,15 +540,16 @@ function renderLogList() {
     }
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
-    // Attach Event Listeners (за триене и редакция)
+    // Закачане на бутоните (Event Listeners)
     State.logs.forEach(l => {
-        document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Delete?')) dbDeleteLog(l.id); });
+        document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Изтриване?')) dbDeleteLog(l.id); });
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
             document.getElementById('date').value = l.date;
             document.getElementById('kwh').value = l.kwh;
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
-            document.getElementById('odo').value = l.odo || ''; 
+            document.getElementById('odo').value = l.odo || '';
+            
             const sel = document.getElementById('type');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; } }
             
@@ -539,7 +559,6 @@ function renderLogList() {
             btn.classList.add("update-mode-btn");
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
             
-            // Trigger preview update manually
             const event = new Event('input');
             document.getElementById('kwh').dispatchEvent(event);
         });
