@@ -587,14 +587,10 @@ function bindCostsForm() {
 }
 
 function renderCostsList() {
-    // Взимаме контейнера (div-а), където ще рисуваме
-    // ВНИМАНИЕ: Провери в HTML файла дали div-ът се казва 'costs' или 'costsList'. 
-    // Обикновено в tab-content e 'costs'.
     const div = document.getElementById('costs') || document.getElementById('costsList');
-    
-    if (!div) return; // Защита ако не намери елемента
+    if (!div) return;
 
-    // --- 1. КАЛКУЛАЦИЯ НА СПЕСТЯВАНИЯТА (От Logs) ---
+    // --- 1. КАЛКУЛАЦИЯ (Финансов баланс) ---
     const ICE_MPG = 45; 
     const ICE_FUEL_PRICE = 1.45;
     const LITERS_PER_GALLON = 4.54609;
@@ -602,15 +598,14 @@ function renderCostsList() {
     let totalEvCost = 0;
     let totalMiles = 0;
     
-    // Сортираме логовете по дата
+    // Смятаме само от ЛОГОВЕТЕ (Зарежданията)
     const sortedLogs = [...State.logs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     for(let i = 0; i < sortedLogs.length; i++) {
         const l = sortedLogs[i];
-        // Цена на тока
+        // Взимаме цената (ако е записана Total, или смятаме kwh * price)
         totalEvCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price)));
 
-        // Изчисляване на изминати мили
         if (l.odo) {
             for(let j = i + 1; j < sortedLogs.length; j++) {
                 if(sortedLogs[j].odo) {
@@ -622,29 +617,30 @@ function renderCostsList() {
         }
     }
 
-    // Сметка за ДВГ
     const gallons = totalMiles / ICE_MPG;
     const liters = gallons * LITERS_PER_GALLON;
     const totalIceCost = liters * ICE_FUEL_PRICE;
     const totalSaved = totalIceCost - totalEvCost;
+
+    // Цвят на сумата (Зелен ако пестиш, Червен ако си на загуба)
+    const savedColor = totalSaved >= 0 ? '#4CAF50' : '#f44336'; 
 
     // Проценти за графиката
     const maxVal = Math.max(totalIceCost, totalEvCost);
     const icePercent = maxVal > 0 ? (totalIceCost / maxVal) * 100 : 0;
     const evPercent = maxVal > 0 ? (totalEvCost / maxVal) * 100 : 0;
 
-
-    // --- 2. ГЕНЕРИРАНЕ НА HTML ---
-    
-    // А) Секция "ТАБЛО СПЕСТЯВАНИЯ"
+    // --- 2. HTML ГЕНЕРИРАНЕ ---
     let html = `
     <div style="background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
         <h3 style="margin:0; color:#888; font-size: 0.9rem; text-transform: uppercase;">Финансов Баланс (Гориво)</h3>
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
             <div>
-                <div style="font-size:2rem; font-weight:bold; color: #4CAF50;">£${totalSaved.toFixed(2)}</div>
-                <div style="font-size:0.8rem; color:#aaa;">Спестени спрямо ДВГ</div>
+                <div style="font-size:2rem; font-weight:bold; color: ${savedColor};">
+                    ${totalSaved >= 0 ? 'SAVE' : 'LOSS'} £${Math.abs(totalSaved).toFixed(2)}
+                </div>
+                <div style="font-size:0.8rem; color:#aaa;">Спрямо ДВГ (${ICE_MPG} mpg)</div>
             </div>
             <div style="text-align:right;">
                 <div style="font-size:0.9rem; color:#fff;">${totalMiles.toFixed(0)} mi</div>
@@ -654,137 +650,131 @@ function renderCostsList() {
 
         <div style="margin-top:20px;">
             <div style="display:flex; align-items:center; margin-bottom:8px;">
-                <span style="width:40px; font-size:0.75rem; color:#aaa;">ICE</span>
-                <div style="flex-grow:1; background:#333; height:8px; border-radius:4px; margin:0 10px; position:relative;">
+                <span style="width:30px; font-size:0.7rem; color:#aaa;">ICE</span>
+                <div style="flex-grow:1; background:#333; height:8px; border-radius:4px; margin:0 10px;">
                     <div style="width:${icePercent}%; background:#f44336; height:100%; border-radius:4px;"></div>
                 </div>
-                <span style="width:60px; text-align:right; font-size:0.8rem; color:#f44336;">£${totalIceCost.toFixed(0)}</span>
+                <span style="width:50px; text-align:right; font-size:0.8rem; color:#f44336;">£${totalIceCost.toFixed(0)}</span>
             </div>
-            
             <div style="display:flex; align-items:center;">
-                <span style="width:40px; font-size:0.75rem; color:#aaa;">EV</span>
-                <div style="flex-grow:1; background:#333; height:8px; border-radius:4px; margin:0 10px; position:relative;">
-                    <div style="width:${evPercent}%; background:#4CAF50; height:100%; border-radius:4px;"></div>
+                <span style="width:30px; font-size:0.7rem; color:#aaa;">EV</span>
+                <div style="flex-grow:1; background:#333; height:8px; border-radius:4px; margin:0 10px;">
+                    <div style="width:${evPercent}%; background:${savedColor}; height:100%; border-radius:4px;"></div>
                 </div>
-                <span style="width:60px; text-align:right; font-size:0.8rem; color:#4CAF50;">£${totalEvCost.toFixed(0)}</span>
+                <span style="width:50px; text-align:right; font-size:0.8rem; color:${savedColor};">£${totalEvCost.toFixed(0)}</span>
             </div>
         </div>
     </div>
     
     <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
-    `;
 
-    // Б) Секция "ДОБАВИ РАЗХОД" (Формата)
-    html += `
-    <div class="input-group">
-        <label>Разход за:</label>
-        <select id="cost-car" class="input-field">
-            <option value="My Car (EV)">Моята Кола (EV)</option>
-        </select>
-    </div>
-    <div class="input-group">
-        <label>Дата</label>
-        <input type="date" id="cost-date" class="input-field">
-    </div>
-    <div class="input-group">
-        <label>Категория</label>
+    <div class="input-group"><label>Категория</label>
         <select id="cost-cat" class="input-field">
-            <option>Service</option>
-            <option>Tires</option>
-            <option>Insurance</option>
-            <option>Tax</option>
-            <option>Repair</option>
-            <option>Accessories</option>
-            <option>Other</option>
+            <option>Service</option><option>Tires</option><option>Insurance</option>
+            <option>Tax</option><option>Repair</option><option>Accessories</option><option>Other</option>
         </select>
     </div>
-    <div class="input-group">
-        <label>Сума (£)</label>
-        <input type="number" id="cost-amount" class="input-field" placeholder="0.00" step="0.01">
-    </div>
-    <div class="input-group">
-        <label>Описание</label>
-        <input type="text" id="cost-note" class="input-field" placeholder="ex. Winter tires">
-    </div>
+    <div class="input-group"><label>Дата</label><input type="date" id="cost-date" class="input-field"></div>
+    <div class="input-group"><label>Сума (£)</label><input type="number" id="cost-amount" class="input-field" placeholder="0.00" step="0.01"></div>
+    <div class="input-group"><label>Описание</label><input type="text" id="cost-note" class="input-field" placeholder="Бележка..."></div>
+    
     <button id="addCostBtn" class="primary-btn" style="margin-top:10px;">Add Cost</button>
+    <button id="updateCostBtn" class="primary-btn" style="margin-top:10px; display:none; background:#FF9800;">Update Cost</button>
     
     <div style="margin-top:30px;">
-        <h3 style="border-left: 4px solid #4CAF50; padding-left: 10px; margin-bottom:15px;">История на разходите</h3>
+        <h3 style="border-left: 4px solid #FF9800; padding-left: 10px; margin-bottom:15px;">История на разходите</h3>
         <div id="costListContainer"></div>
-    </div>
-    `;
+    </div>`;
 
     div.innerHTML = html;
 
-    // В) Попълване на днешна дата
-    const dateInput = document.getElementById('cost-date');
-    if(dateInput) dateInput.valueAsDate = new Date();
+    // Слагаме днешна дата
+    const dInput = document.getElementById('cost-date');
+    if(dInput) dInput.valueAsDate = new Date();
 
-    // Г) Логика за бутона Add Cost
-    const addBtn = document.getElementById('addCostBtn');
-    if(addBtn) {
-        addBtn.onclick = () => {
-            const amount = parseFloat(document.getElementById('cost-amount').value);
-            const cat = document.getElementById('cost-cat').value;
-            const note = document.getElementById('cost-note').value;
-            const date = document.getElementById('cost-date').value;
+    // ADD BUTTON Logic
+    document.getElementById('addCostBtn').onclick = () => {
+        const amount = parseFloat(document.getElementById('cost-amount').value);
+        const cat = document.getElementById('cost-cat').value;
+        const note = document.getElementById('cost-note').value;
+        const date = document.getElementById('cost-date').value;
+        if(!amount || !date) return alert('Въведете сума и дата');
 
-            if(!amount || !date) return alert('Моля въведете сума и дата.');
+        dbAddCost({ id: Date.now(), car: 'EV', amount, category: cat, date, note });
+    };
 
-            const newCost = {
-                id: Date.now(),
-                car: 'EV',
-                amount,
-                category: cat,
-                date,
-                note
-            };
+    // UPDATE BUTTON Logic
+    document.getElementById('updateCostBtn').onclick = () => {
+        if(!State.editCostId) return;
+        const amount = parseFloat(document.getElementById('cost-amount').value);
+        const cat = document.getElementById('cost-cat').value;
+        const note = document.getElementById('cost-note').value;
+        const date = document.getElementById('cost-date').value;
+        
+        // Тук е малко по-сложно, защото трябва да обновим записа в базата.
+        // За по-лесно: трием стария и добавяме новия със същото ID.
+        const updatedCost = { id: State.editCostId, car: 'EV', amount, category: cat, date, note };
+        
+        // Намираме индекса в локалния масив и го обновяваме (симулация)
+        // В реалността трябва функция dbUpdateCost, но може и така:
+        dbDeleteCost(State.editCostId, false); // false = без refresh
+        setTimeout(() => dbAddCost(updatedCost), 500); 
+    };
 
-            dbAddCost(newCost); 
-        };
-    }
-
-    // Д) Рендиране на списъка (долната част)
+    // RENDER LIST
     const listDiv = document.getElementById('costListContainer');
     let listHtml = '';
-    
     const sortedCosts = [...State.costs].sort((a,b) => new Date(b.date) - new Date(a.date));
 
     sortedCosts.forEach(c => {
+        // Fix за "undefined" - проверяваме всички възможни имена на полето
+        const catName = c.category || c.cat || c.type || 'Other';
+        
         let icon = '🔧';
-        if(c.category === 'Tires') icon = '🛞';
-        if(c.category === 'Insurance') icon = '📄';
-        if(c.category === 'Tax') icon = '🏛️';
-        if(c.category === 'Other') icon = '⚡';
+        if(catName === 'Tires') icon = '🛞';
+        if(catName === 'Insurance') icon = '📄';
+        if(catName === 'Other') icon = '⚡';
 
         listHtml += `
         <div class="log-entry" style="border-left: 3px solid #FF9800;">
             <div class="log-info">
                 <div class="log-main-row">
-                    <span style="font-weight:bold; font-size:1.1rem;">£${parseFloat(c.amount).toFixed(2)}</span>
-                    <span style="color:#FF9800; font-size:0.9rem;"> ${icon} ${c.category}</span>
+                    <span style="font-weight:bold;">£${parseFloat(c.amount).toFixed(2)}</span>
+                    <span style="color:#FF9800; font-size:0.9rem;"> ${icon} ${catName}</span>
                 </div>
-                <div class="log-sub-row">
-                    <span>${c.date}</span>
-                </div>
-                ${c.note ? `<div class="log-note" style="color:#aaa; font-style:italic;">${c.note}</div>` : ''}
+                <div class="log-sub-row"><span>${c.date}</span></div>
+                ${c.note ? `<div class="log-note">${c.note}</div>` : ''}
             </div>
             <div class="action-btn-group">
+                <button class="edit-btn" id="edit-cost-${c.id}">✎</button>
                 <button class="delete-btn" id="del-cost-${c.id}">×</button>
             </div>
         </div>`;
     });
+    listDiv.innerHTML = listHtml || '<p style="text-align:center; color:#666;">Няма разходи.</p>';
 
-    if(listDiv) listDiv.innerHTML = listHtml || '<p style="text-align:center; color:#666;">Няма записани разходи.</p>';
-
-    // Event listeners за триене на разходи
+    // LISTENERS
     sortedCosts.forEach(c => {
-        const delBtn = document.getElementById(`del-cost-${c.id}`);
-        if(delBtn) {
-            delBtn.addEventListener('click', () => {
-                if(confirm('Delete cost?')) dbDeleteCost(c.id);
-            });
-        }
+        // DELETE
+        document.getElementById(`del-cost-${c.id}`).onclick = () => { if(confirm('Delete?')) dbDeleteCost(c.id); };
+        
+        // EDIT
+        document.getElementById(`edit-cost-${c.id}`).onclick = () => {
+            document.getElementById('cost-amount').value = c.amount;
+            document.getElementById('cost-date').value = c.date;
+            document.getElementById('cost-note').value = c.note || '';
+            
+            const catName = c.category || c.cat || c.type || 'Other';
+            const sel = document.getElementById('cost-cat');
+            for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === catName) sel.selectedIndex = i; }
+
+            State.editCostId = c.id;
+            
+            // Смяна на бутоните
+            document.getElementById('addCostBtn').style.display = 'none';
+            document.getElementById('updateCostBtn').style.display = 'block';
+            document.getElementById('costs').scrollIntoView({behavior:'smooth'});
+        };
     });
 }
 
