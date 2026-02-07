@@ -1,4 +1,4 @@
-/* main.js - Version: Odometer & Distance Calculation */
+/* main.js - Version: Odometer & Distance Calculation + Fixed Costs Tab */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -127,7 +127,11 @@ async function dbDeleteLog(id) { try { await deleteDoc(doc(db, "logs", id)); } c
 
 async function dbAddCost(entry) { try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
 async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error: " + e.message); } }
-async function dbDeleteCost(id) { try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); } }
+async function dbDeleteCost(id, reload = true) { 
+    try { 
+        await deleteDoc(doc(db, "costs", id)); 
+    } catch(e) { console.error(e); } 
+}
 
 async function dbSaveGarage(type, data) {
     const docId = `${State.user.uid}_${type}`;
@@ -249,7 +253,7 @@ async function importFromCSV(file) {
 function initUI() {
     bindNav();
     bindLogForm();
-    bindCostsForm();
+    // bindCostsForm(); <-- ВЕЧЕ НЕ СЕ ПОЛЗВА (Заменена е от renderCostsList)
     bindGarage();
     bindSettings();
     bindCompare();
@@ -566,26 +570,16 @@ function renderLogList() {
 }
 
 function bindCostsForm() {
+    // ТАЗИ ФУНКЦИЯ ВЕЧЕ НЕ Е НУЖНА, НО Я ПАЗИМ ЗА ИСТОРИЯ
     const btnAdd = document.getElementById('c_add');
-    btnAdd.addEventListener('click', () => {
-        const date = document.getElementById('c_date').value;
-        const amount = parseFloat(document.getElementById('c_amount').value);
-        const cat = document.getElementById('c_category').value;
-        const note = document.getElementById('c_note').value;
-        const target = document.getElementById('c_target').value;
-        if(!date || !amount) return alert('Enter amount and date');
-        const entryData = { date, amount, cat, note, target };
-        if (State.editCostId) {
-            dbUpdateCost(State.editCostId, entryData);
-            State.editCostId = null;
-            btnAdd.innerText = "Add Cost";
-            btnAdd.classList.remove("update-mode-btn");
-        } else { dbAddCost(entryData); }
-        document.getElementById('c_amount').value = '';
-        document.getElementById('c_note').value = '';
-    });
+    if(btnAdd) {
+        btnAdd.addEventListener('click', () => {
+            // ... (Стара логика) ...
+        });
+    }
 }
 
+//От тук започва function renderCostsList()
 function renderCostsList() {
     const div = document.getElementById('costs') || document.getElementById('costsList');
     if (!div) return;
@@ -777,6 +771,7 @@ function renderCostsList() {
         };
     });
 }
+//Тук завършва function renderCostsList()
 
 // *** SMART GARAGE LOGIC (Full Replacement) ***
 
