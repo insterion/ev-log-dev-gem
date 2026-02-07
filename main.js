@@ -1,5 +1,6 @@
-/* main.js - Version: Odometer & Distance Calculation + Fixed Costs Tab */
+/* main.js - Version: Full Comments & Sections */
 
+//От тук започват IMPORT библиотеките
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, setDoc, updateDoc, enableIndexedDbPersistence 
@@ -7,8 +8,9 @@ import {
 import { 
     getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+//Тук завършват IMPORT библиотеките
 
-// --- ТВОЯТ FIREBASE CONFIG ---
+//От тук започва FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyA-FbmvdK3eaYUsaT9Iqc3dUILH4rYDe8U",
   authDomain: "ev-log-2487f.firebaseapp.com",
@@ -17,20 +19,18 @@ const firebaseConfig = {
   messagingSenderId: "313386156743",
   appId: "1:313386156743:web:8451e533f1af823c0534e2"
 };
-// -----------------------------
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
     console.log("Persistence logic:", err.code);
 });
+//Тук завършва FIREBASE CONFIG
 
-// App State
+//От тук започва APP STATE (Състояние на приложението)
 const State = {
     user: null,
     logs: [],
@@ -42,8 +42,9 @@ const State = {
     editCostId: null,
     chartMode: 'cumulative' 
 };
+//Тук завършва APP STATE
 
-// --- AUTH LOGIC ---
+//От тук започва AUTH LOGIC (Логин и Логаут)
 const loginScreen = document.getElementById('login-screen');
 const appContent = document.getElementById('app-content');
 const btnLogin = document.getElementById('btnLogin');
@@ -70,25 +71,26 @@ onAuthStateChanged(auth, (user) => {
         appContent.style.display = 'none';
     }
 });
+//Тук завършва AUTH LOGIC
 
-// --- FIRESTORE LISTENERS ---
+//От тук започва function initDataListeners (Слушатели за данни)
 let unsubscribeLogs, unsubscribeCosts, unsubscribeGarage, unsubscribeSettings;
 
 function initDataListeners() {
     const uid = State.user.uid;
 
-    // Logs - Sort Descending (Newest first) is crucial for Odo math
+    // Logs Listener
     const qLogs = query(collection(db, "logs"), where("uid", "==", uid));
     unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
         State.logs = [];
         snapshot.forEach((doc) => State.logs.push({ id: doc.id, ...doc.data() }));
-        State.logs.sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest first
+        State.logs.sort((a, b) => new Date(b.date) - new Date(a.date));
         renderLogList();
         renderHomeDashboard();
         updateStats();
     });
 
-    // Costs
+    // Costs Listener
     const qCosts = query(collection(db, "costs"), where("uid", "==", uid));
     unsubscribeCosts = onSnapshot(qCosts, (snapshot) => {
         State.costs = [];
@@ -98,7 +100,7 @@ function initDataListeners() {
         updateStats();
     });
 
-    // Garage
+    // Garage Listener
     const qGarage = query(collection(db, "garage"), where("uid", "==", uid));
     unsubscribeGarage = onSnapshot(qGarage, (snapshot) => {
         State.garage = { ev: {}, ice: {} };
@@ -110,7 +112,7 @@ function initDataListeners() {
         loadGarageDataToUI();
     });
 
-    // Settings
+    // Settings Listener
     unsubscribeSettings = onSnapshot(doc(db, "settings", uid), (docSnap) => {
         if (docSnap.exists()) {
             State.settings = docSnap.data();
@@ -119,19 +121,16 @@ function initDataListeners() {
         }
     });
 }
+//Тук завършва function initDataListeners
 
-// --- DATABASE ACTIONS ---
+//От тук започват DATABASE ACTIONS (Функции за запис и триене)
 async function dbAddLog(entry) { try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
 async function dbUpdateLog(id, entry) { try { await updateDoc(doc(db, "logs", id), entry); } catch (e) { alert("Error: " + e.message); } }
 async function dbDeleteLog(id) { try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); } }
 
 async function dbAddCost(entry) { try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
 async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error: " + e.message); } }
-async function dbDeleteCost(id, reload = true) { 
-    try { 
-        await deleteDoc(doc(db, "costs", id)); 
-    } catch(e) { console.error(e); } 
-}
+async function dbDeleteCost(id) { try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); } }
 
 async function dbSaveGarage(type, data) {
     const docId = `${State.user.uid}_${type}`;
@@ -140,12 +139,13 @@ async function dbSaveGarage(type, data) {
 async function dbSaveSettings(settings) {
     try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
 }
+//Тук завършват DATABASE ACTIONS
 
-// --- IMPORT / EXPORT FUNCTIONS ---
+//От тук започват IMPORT / EXPORT CSV функции
 function exportToCSV(data, filename) {
     if (!data || !data.length) { alert("Няма данни."); return; }
     let headers = [];
-    if(filename.includes("Logs")) headers = ["Date", "Odometer", "Type", "KWh", "Price", "Total", "Note"]; // Added Odometer
+    if(filename.includes("Logs")) headers = ["Date", "Odometer", "Type", "KWh", "Price", "Total", "Note"];
     else headers = ["Date", "Amount", "Category", "Target", "Note"];
 
     let csvContent = headers.join(",") + "\n";
@@ -176,7 +176,6 @@ function exportToCSV(data, filename) {
     document.body.removeChild(link);
 }
 
-// CSV Parser
 function parseCSV(text) {
     const lines = text.split('\n').filter(l => l.trim() !== '');
     if(lines.length < 2) return [];
@@ -246,14 +245,12 @@ async function importFromCSV(file) {
     };
     reader.readAsText(file);
 }
+//Тук завършват IMPORT / EXPORT CSV функции
 
-
-// --- UI LOGIC ---
-
+//От тук започва function initUI (Старт на интерфейса)
 function initUI() {
     bindNav();
     bindLogForm();
-    // bindCostsForm(); <-- ВЕЧЕ НЕ СЕ ПОЛЗВА (Заменена е от renderCostsList)
     bindGarage();
     bindSettings();
     bindCompare();
@@ -263,7 +260,9 @@ function initUI() {
     if(document.getElementById('date')) document.getElementById('date').value = today;
     if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
 }
+//Тук завършва function initUI
 
+//От тук започва function bindNav (Навигация)
 function bindNav() {
     document.querySelectorAll('.tabbtn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -277,8 +276,9 @@ function bindNav() {
         });
     });
 }
+//Тук завършва function bindNav
 
-// *** UPGRADED HOME DASHBOARD (With Miles & Efficiency) ***
+//От тук започва function renderHomeDashboard (Начален екран)
 function renderHomeDashboard() {
     const div = document.getElementById('home-stats');
     if(!div) return;
@@ -290,9 +290,7 @@ function renderHomeDashboard() {
 
     // 1. Current Month Filter
     const now = new Date();
-    const currentMonthKey = now.toISOString().slice(0, 7); // "2024-02"
-    
-    // Взимаме само записите за този месец
+    const currentMonthKey = now.toISOString().slice(0, 7);
     const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
     
     // 2. Calculate Totals
@@ -303,10 +301,7 @@ function renderHomeDashboard() {
     monthLogs.forEach(l => {
         totalCost += (l.total || l.kwh * l.price);
         totalKwh += l.kwh;
-
-        // Смятане на дистанция за всеки запис от месеца
         if(l.odo) {
-             // Търсим предходния запис в ЦЯЛАТА история (не само в месеца)
              const currentIndex = State.logs.findIndex(x => x.id === l.id);
              if(currentIndex !== -1) {
                  for(let j = currentIndex + 1; j < State.logs.length; j++) {
@@ -319,7 +314,6 @@ function renderHomeDashboard() {
         }
     });
 
-    // Calculate Efficiency (Avoid division by zero)
     const avgEff = totalKwh > 0 && totalDist > 0 ? (totalDist / totalKwh).toFixed(1) : "---";
 
     // 3. Last Charge Logic
@@ -356,7 +350,9 @@ function renderHomeDashboard() {
         </div>
     `;
 }
+//Тук завършва function renderHomeDashboard
 
+//От тук започва function bindLogForm (Форма за зареждане)
 function bindLogForm() {
     const btnAdd = document.getElementById('addEntry');
     const typeSelect = document.getElementById('type');
@@ -364,18 +360,14 @@ function bindLogForm() {
     const kwhInput = document.getElementById('kwh');
     const odoInput = document.getElementById('odo');
     
-    // ПОПРАВКА: Тази функция вече само ПРЕДЛАГА цена, но не заключва полето
     const syncPrice = () => {
         const opt = typeSelect.options[typeSelect.selectedIndex];
-        // Ако сме в режим на редакция (Edit), не пипай цената, която потребителят е въвел
         if (btnAdd.classList.contains("update-mode-btn")) return;
 
         if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
-            // ПРЕМАХНАТО: priceInput.setAttribute('readonly', true); -> Вече може да се пише
-            // Връщаме нормалния вид на полето
             priceInput.style.opacity = "1";
-            priceInput.style.background = "#2c2c2c"; // Стандартния цвят
+            priceInput.style.background = "#2c2c2c";
         } else {
             priceInput.removeAttribute('readonly');
             priceInput.style.opacity = "1";
@@ -388,14 +380,11 @@ function bindLogForm() {
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
     
-    // Първоначално зареждане, ако полето е празно
     if(!priceInput.value) syncPrice();
 
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('date').value;
         const kwh = parseFloat(kwhInput.value);
-        
-        // Ако потребителят е изтрил цената, сложи тази по подразбиране
         if (!priceInput.value) syncPrice();
         
         const price = parseFloat(priceInput.value);
@@ -415,13 +404,10 @@ function bindLogForm() {
             dbAddLog(entryData);
         }
         
-        // Изчистване на полетата след запис
         kwhInput.value = '';
         odoInput.value = ''; 
         document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
-        
-        // Връщаме цената към default за следващия запис
         syncPrice(); 
     });
 }
@@ -450,21 +436,19 @@ function updateLogPreview() {
             </div>
         </div>`;
 }
+//Тук завършва function bindLogForm
 
+//От тук започва function renderLogList (Списък зареждания)
 function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
 
-    // --- НАСТРОЙКИ ЗА СРАВНЕНИЕ (ICE) ---
-    const ICE_MPG = 45;           // Твоят разход (45 мили с 1 галон)
-    const ICE_FUEL_PRICE = 1.45;  // Цена на литър гориво
-    const LITERS_PER_GALLON = 4.54609; // Британски галон към литри
-    // ------------------------------------
+    const ICE_MPG = 45;
+    const ICE_FUEL_PRICE = 1.45;
+    const LITERS_PER_GALLON = 4.54609;
 
     for(let i = 0; i < State.logs.length; i++) {
         const l = State.logs[i];
-        
-        // Реална цена на зареждането (ако има Total ползва него, иначе смята kWh * price)
         const cost = l.total !== undefined ? l.total : (l.kwh * l.price);
         
         let distanceHtml = '';
@@ -473,7 +457,6 @@ function renderLogList() {
 
         if (l.odo) {
             let dist = 0;
-            // Търсим предишен запис, за да видим колко сме минали
             for(let j = i + 1; j < State.logs.length; j++) {
                 if(State.logs[j].odo) {
                     dist = l.odo - State.logs[j].odo;
@@ -482,10 +465,7 @@ function renderLogList() {
             }
             
             if(dist > 0) {
-                // 1. Ефективност (mi/kWh)
                 const efficiency = dist / l.kwh;
-                
-                // Цвят за ефективността
                 let effColor = '#888'; 
                 if(efficiency > 4.0) effColor = '#4CAF50'; 
                 else if(efficiency < 2.5) effColor = '#f44336'; 
@@ -493,25 +473,16 @@ function renderLogList() {
                 distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9rem; margin-right:8px;">+${dist} mi</span>`;
                 effHtml = `<span style="color:${effColor}; font-size:0.8rem; background:#222; padding:2px 6px; border-radius:4px; margin-right:8px;">${efficiency.toFixed(1)} mi/kWh</span>`;
 
-                // 2. СМЕТКА: СПЕСТЯВАНЕ СПРЯМО ДВГ (45 MPG)
-                // Колко галона би изгорила ДВГ колата за тези мили?
                 const gallonsNeeded = dist / ICE_MPG;
-                // Колко литра са това?
                 const litersNeeded = gallonsNeeded * LITERS_PER_GALLON;
-                // Колко би струвал бензинът?
                 const iceCost = litersNeeded * ICE_FUEL_PRICE;
-                
-                // Разликата (Ако Бензин > Ток = Спестяваме)
                 const savings = iceCost - cost;
 
                 if (savings >= 0) {
-                    // Зелено (Спестено)
                     savingsHtml = `<span style="color:#4CAF50; font-weight:bold; font-size:0.85rem;">SAVE £${savings.toFixed(2)}</span>`;
                 } else {
-                    // Червено (Загуба)
                     savingsHtml = `<span style="color:#f44336; font-weight:bold; font-size:0.85rem;">LOSS £${Math.abs(savings).toFixed(2)}</span>`;
                 }
-
             } else {
                 distanceHtml = `<span style="color:#666; font-size:0.9em; margin-right:10px;">${l.odo} mi</span>`;
             }
@@ -524,18 +495,14 @@ function renderLogList() {
                     <span>${l.kwh} kWh</span>
                     <span class="cost-tag">£${cost.toFixed(2)}</span>
                 </div>
-                
                 <div class="log-sub-row" style="margin-top:6px; align-items:center; flex-wrap:wrap;">
-                    ${distanceHtml}
-                    ${effHtml}
-                    ${savingsHtml}  </div>
-
+                    ${distanceHtml} ${effHtml} ${savingsHtml}
+                </div>
                 <div class="log-sub-row" style="margin-top:4px;">
                     <span>${l.date}</span><span> • </span><span>${l.type}</span>
                 </div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
             </div>
-            
             <div class="action-btn-group">
                 <button class="edit-btn" id="edit-log-${l.id}">✎</button>
                 <button class="delete-btn" id="del-log-${l.id}">×</button>
@@ -544,7 +511,6 @@ function renderLogList() {
     }
     div.innerHTML = html || '<p style="text-align:center; color:#666; padding:20px;">Няма записи</p>';
 
-    // Закачане на бутоните (Event Listeners)
     State.logs.forEach(l => {
         document.getElementById(`del-log-${l.id}`).addEventListener('click', () => { if(confirm('Изтриване?')) dbDeleteLog(l.id); });
         document.getElementById(`edit-log-${l.id}`).addEventListener('click', () => {
@@ -553,7 +519,6 @@ function renderLogList() {
             document.getElementById('price').value = l.price;
             document.getElementById('note').value = l.note || '';
             document.getElementById('odo').value = l.odo || '';
-            
             const sel = document.getElementById('type');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].text === l.type) { sel.selectedIndex = i; break; } }
             
@@ -568,23 +533,14 @@ function renderLogList() {
         });
     });
 }
+//Тук завършва function renderLogList
 
-function bindCostsForm() {
-    // ТАЗИ ФУНКЦИЯ ВЕЧЕ НЕ Е НУЖНА, НО Я ПАЗИМ ЗА ИСТОРИЯ
-    const btnAdd = document.getElementById('c_add');
-    if(btnAdd) {
-        btnAdd.addEventListener('click', () => {
-            // ... (Стара логика) ...
-        });
-    }
-}
-
-//От тук започва function renderCostsList()
+//От тук започва function renderCostsList (Списък разходи и форма)
 function renderCostsList() {
     const div = document.getElementById('costs') || document.getElementById('costsList');
     if (!div) return;
 
-    // --- 1. КАЛКУЛАЦИЯ (Финансов баланс) ---
+    // --- 1. КАЛКУЛАЦИЯ ---
     const ICE_MPG = 45; 
     const ICE_FUEL_PRICE = 1.45;
     const LITERS_PER_GALLON = 4.54609;
@@ -592,12 +548,10 @@ function renderCostsList() {
     let totalEvCost = 0;
     let totalMiles = 0;
     
-    // Смятаме само от ЛОГОВЕТЕ (Зарежданията)
     const sortedLogs = [...State.logs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     for(let i = 0; i < sortedLogs.length; i++) {
         const l = sortedLogs[i];
-        // Взимаме цената (ако е записана Total, или смятаме kwh * price)
         totalEvCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price)));
 
         if (l.odo) {
@@ -615,20 +569,15 @@ function renderCostsList() {
     const liters = gallons * LITERS_PER_GALLON;
     const totalIceCost = liters * ICE_FUEL_PRICE;
     const totalSaved = totalIceCost - totalEvCost;
-
-    // Цвят на сумата (Зелен ако пестиш, Червен ако си на загуба)
     const savedColor = totalSaved >= 0 ? '#4CAF50' : '#f44336'; 
-
-    // Проценти за графиката
     const maxVal = Math.max(totalIceCost, totalEvCost);
     const icePercent = maxVal > 0 ? (totalIceCost / maxVal) * 100 : 0;
     const evPercent = maxVal > 0 ? (totalEvCost / maxVal) * 100 : 0;
 
-    // --- 2. HTML ГЕНЕРИРАНЕ ---
+    // --- 2. HTML ---
     let html = `
     <div style="background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
         <h3 style="margin:0; color:#888; font-size: 0.9rem; text-transform: uppercase;">Финансов Баланс (Гориво)</h3>
-        
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
             <div>
                 <div style="font-size:2rem; font-weight:bold; color: ${savedColor};">
@@ -682,22 +631,20 @@ function renderCostsList() {
 
     div.innerHTML = html;
 
-    // Слагаме днешна дата
     const dInput = document.getElementById('cost-date');
     if(dInput) dInput.valueAsDate = new Date();
 
-    // ADD BUTTON Logic
+    // ADD Logic
     document.getElementById('addCostBtn').onclick = () => {
         const amount = parseFloat(document.getElementById('cost-amount').value);
         const cat = document.getElementById('cost-cat').value;
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
         if(!amount || !date) return alert('Въведете сума и дата');
-
         dbAddCost({ id: Date.now(), car: 'EV', amount, category: cat, date, note });
     };
 
-    // UPDATE BUTTON Logic
+    // UPDATE Logic
     document.getElementById('updateCostBtn').onclick = () => {
         if(!State.editCostId) return;
         const amount = parseFloat(document.getElementById('cost-amount').value);
@@ -705,13 +652,8 @@ function renderCostsList() {
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
         
-        // Тук е малко по-сложно, защото трябва да обновим записа в базата.
-        // За по-лесно: трием стария и добавяме новия със същото ID.
         const updatedCost = { id: State.editCostId, car: 'EV', amount, category: cat, date, note };
-        
-        // Намираме индекса в локалния масив и го обновяваме (симулация)
-        // В реалността трябва функция dbUpdateCost, но може и така:
-        dbDeleteCost(State.editCostId, false); // false = без refresh
+        dbDeleteCost(State.editCostId, false);
         setTimeout(() => dbAddCost(updatedCost), 500); 
     };
 
@@ -721,9 +663,7 @@ function renderCostsList() {
     const sortedCosts = [...State.costs].sort((a,b) => new Date(b.date) - new Date(a.date));
 
     sortedCosts.forEach(c => {
-        // Fix за "undefined" - проверяваме всички възможни имена на полето
         const catName = c.category || c.cat || c.type || 'Other';
-        
         let icon = '🔧';
         if(catName === 'Tires') icon = '🛞';
         if(catName === 'Insurance') icon = '📄';
@@ -747,39 +687,29 @@ function renderCostsList() {
     });
     listDiv.innerHTML = listHtml || '<p style="text-align:center; color:#666;">Няма разходи.</p>';
 
-    // LISTENERS
     sortedCosts.forEach(c => {
-        // DELETE
         document.getElementById(`del-cost-${c.id}`).onclick = () => { if(confirm('Delete?')) dbDeleteCost(c.id); };
-        
-        // EDIT
         document.getElementById(`edit-cost-${c.id}`).onclick = () => {
             document.getElementById('cost-amount').value = c.amount;
             document.getElementById('cost-date').value = c.date;
             document.getElementById('cost-note').value = c.note || '';
-            
             const catName = c.category || c.cat || c.type || 'Other';
             const sel = document.getElementById('cost-cat');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === catName) sel.selectedIndex = i; }
-
             State.editCostId = c.id;
-            
-            // Смяна на бутоните
             document.getElementById('addCostBtn').style.display = 'none';
             document.getElementById('updateCostBtn').style.display = 'block';
             document.getElementById('costs').scrollIntoView({behavior:'smooth'});
         };
     });
 }
-//Тук завършва function renderCostsList()
+//Тук завършва function renderCostsList
 
-// *** SMART GARAGE LOGIC (Full Replacement) ***
-
+//От тук започва GARAGE LOGIC (Гараж и Напомняния)
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
     
-    // Toggle Tabs
     btnEv.addEventListener('click', () => {
         State.currentGarageTab = 'ev';
         btnEv.classList.add('active'); btnIce.classList.remove('active');
@@ -794,16 +724,11 @@ function bindGarage() {
         loadGarageDataToUI();
     });
 
-    // Save Button
     document.getElementById('saveGarageManual').addEventListener('click', () => {
-        // Списък с ВСИЧКИ полета, които записваме
         const ids = [
-            // Docs
             'g_insurance', 'g_mot', 'g_tax', 'g_service', 
-            // Maintenance
             'g_tire_date', 'g_tire_odo', 'g_tire_note',
             'g_12v_date', 'g_filter_date', 'g_wipers_date',
-            // Info
             'g_plate', 'g_vin', 'g_notes'
         ];
         
@@ -812,7 +737,6 @@ function bindGarage() {
             const el = document.getElementById(id); 
             if(el) dataToSave[id] = el.value; 
         });
-        
         dbSaveGarage(State.currentGarageTab, dataToSave);
     });
 }
@@ -830,22 +754,16 @@ function loadGarageDataToUI() {
         const el = document.getElementById(id); 
         if(el) el.value = currentData[id] || ""; 
     });
-    
-    // Изчисляваме статусите веднага след зареждане
     calculateGarageStats();
 }
 
 function calculateGarageStats() {
-    // 1. Стандартни документи (Изтичащи дати)
     const checkExpiry = (inputId, labelId) => {
         const val = document.getElementById(inputId).value;
         const el = document.getElementById(labelId);
         if(!el) return;
-        
         if(!val) { el.innerText = "--"; el.className = "status-badge"; return; }
-        
         const diff = Math.ceil((new Date(val) - new Date()) / (1000 * 60 * 60 * 24)); 
-        
         if(diff < 0) { el.innerText = "ИЗТЕКЛО!"; el.className = "status-badge status-danger"; } 
         else if (diff <= 30) { el.innerText = `${diff} дни`; el.className = "status-badge status-warning"; } 
         else { el.innerText = `${diff} дни`; el.className = "status-badge status-ok"; }
@@ -856,7 +774,6 @@ function calculateGarageStats() {
     checkExpiry('g_tax', 'status_tax');
     checkExpiry('g_service', 'status_service');
 
-    // 2. ГУМИ (Пробег + Възраст)
     const tireDiv = document.getElementById('stat_tires');
     const tireOdo = parseFloat(document.getElementById('g_tire_odo').value) || 0;
     const currentOdo = (State.logs.length > 0 && State.logs[0].odo) ? State.logs[0].odo : 0;
@@ -868,34 +785,28 @@ function calculateGarageStats() {
     }
     tireDiv.innerText = tireText;
 
-    // 3. Възраст на части (Age Check)
     const checkAge = (inputId, outputId, warnYears) => {
         const val = document.getElementById(inputId).value;
         const el = document.getElementById(outputId);
         if(!val || !el) return;
-
         const date = new Date(val);
         const now = new Date();
         const monthsDiff = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
-        
         let txt = "";
         let color = "#aaa";
-
         if(monthsDiff < 12) txt = `${monthsDiff} мес.`;
         else txt = `${(monthsDiff/12).toFixed(1)} г.`;
-
-        // Ако е старо (над warnYears), оцветяваме в червено
         if (monthsDiff > (warnYears * 12)) color = "#f44336"; 
-        
         el.innerText = `Възраст: ${txt}`;
         el.style.color = color;
     };
-
-    checkAge('g_12v_date', 'stat_12v', 3);      // 3 години за акумулатор
-    checkAge('g_filter_date', 'stat_filter', 2); // 2 години за филтър
-    checkAge('g_wipers_date', 'stat_wipers', 1); // 1 година за чистачки
+    checkAge('g_12v_date', 'stat_12v', 3);
+    checkAge('g_filter_date', 'stat_filter', 2);
+    checkAge('g_wipers_date', 'stat_wipers', 1);
 }
+//Тук завършва GARAGE LOGIC
 
+//От тук започва SETTINGS & COMPARE (Настройки и Калкулатор)
 function bindSettings() {
     document.getElementById('saveCompareSettings').addEventListener('click', () => {
         const s = {
@@ -908,7 +819,6 @@ function bindSettings() {
     document.getElementById('btnExportLogs').addEventListener('click', () => exportToCSV(State.logs, 'EV_Logs.csv'));
     document.getElementById('btnExportCosts').addEventListener('click', () => exportToCSV(State.costs, 'EV_Costs.csv'));
     
-    // IMPORT BINDING
     document.getElementById('btnImport').addEventListener('click', () => {
         const fileInput = document.getElementById('importFile');
         importFromCSV(fileInput.files[0]);
@@ -930,7 +840,9 @@ function bindCompare() {
             </div>`;
     });
 }
+//Тук завършва SETTINGS & COMPARE
 
+//От тук започва CHART & STATS LOGIC (Графики и Статистика)
 function bindChartControls() {
     const bCum = document.getElementById('btn-chart-cum');
     const bMonth = document.getElementById('btn-chart-month');
@@ -1044,3 +956,4 @@ function renderChart() {
         }
     });
 }
+//Тук завършва CHART & STATS LOGIC
