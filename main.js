@@ -536,20 +536,17 @@ function renderLogList() {
 //Тук завършва function renderLogList
 
 //От тук започва function renderCostsList (Списък разходи и форма)
-//От тук започва function renderCostsList (Списък разходи и форма)
 function renderCostsList() {
     const div = document.getElementById('costs') || document.getElementById('costsList');
     if (!div) return;
 
     // --- 0. MIGRATION (Автоматично поправяне на стари записи) ---
-    // Ако има записи без поле 'car', приемаме че са за EV
     let migrationNeeded = false;
     State.costs.forEach(c => {
         if (!c.car) { c.car = 'ev'; migrationNeeded = true; }
     });
     if (migrationNeeded) {
         console.log("Migrating old costs to EV...");
-        // Записваме промените тихо в базата, за да не пита всеки път
         State.costs.forEach(c => { if(!c.car) dbUpdateCost(c.id, {car: 'ev'}); });
     }
 
@@ -561,7 +558,6 @@ function renderCostsList() {
     let totalEvCost = 0;
     let totalMiles = 0;
     
-    // Смятаме само от ЛОГОВЕТЕ (Зарежданията)
     const sortedLogs = [...State.logs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     for(let i = 0; i < sortedLogs.length; i++) {
@@ -685,7 +681,7 @@ function renderCostsList() {
         const cat = document.getElementById('cost-cat').value;
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
-        const car = document.getElementById('cost-car-type').value; // 'ev' or 'ice'
+        const car = document.getElementById('cost-car-type').value;
 
         if(!amount || !date) return alert('Въведете сума и дата');
         dbAddCost({ id: Date.now(), car, amount, category: cat, date, note });
@@ -712,14 +708,13 @@ function renderCostsList() {
 
     sortedCosts.forEach(c => {
         const catName = c.category || c.cat || c.type || 'Other';
-        const carType = c.car || 'ev'; // Fallback if missing
+        const carType = c.car || 'ev';
         
-        // Определяне на икона и цвят според колата
         let carIcon = '⚡';
-        let carColor = '#4CAF50'; // Green for EV
+        let carColor = '#4CAF50';
         if(carType === 'ice') {
             carIcon = '⛽';
-            carColor = '#FF9800'; // Orange for ICE
+            carColor = '#FF9800';
         }
 
         let catIcon = '🔧';
@@ -758,7 +753,6 @@ function renderCostsList() {
             const sel = document.getElementById('cost-cat');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === catName) sel.selectedIndex = i; }
             
-            // Set Car Type Button
             const carType = c.car || 'ev';
             if(carType === 'ice') btnIce.click();
             else btnEv.click();
@@ -770,7 +764,6 @@ function renderCostsList() {
         };
     });
 }
-//Тук завършва function renderCostsList
 //Тук завършва function renderCostsList
 
 //От тук започва GARAGE LOGIC (Гараж и Напомняния)
@@ -911,14 +904,16 @@ function bindCompare() {
 //Тук завършва SETTINGS & COMPARE
 
 //От тук започва CHART & STATS LOGIC (Графики и Статистика)
+let compareChart = null; // Глобална променлива за графиката
+
 function bindChartControls() {
     const bCum = document.getElementById('btn-chart-cum');
     const bMonth = document.getElementById('btn-chart-month');
-    bCum.addEventListener('click', () => { State.chartMode = 'cumulative'; bCum.classList.add('active'); bMonth.classList.remove('active'); renderChart(); });
-    bMonth.addEventListener('click', () => { State.chartMode = 'monthly'; bMonth.classList.add('active'); bCum.classList.remove('active'); renderChart(); });
+    if(!bCum || !bMonth) return;
+    bCum.addEventListener('click', () => { State.chartMode = 'cumulative'; bCum.classList.add('active'); bMonth.classList.remove('active'); updateStats(); });
+    bMonth.addEventListener('click', () => { State.chartMode = 'monthly'; bMonth.classList.add('active'); bCum.classList.remove('active'); updateStats(); });
 }
 
-//От тук започва CHART & STATS LOGIC (Графики и Статистика)
 function updateStats() {
     const div = document.getElementById('tco-dashboard');
     if(!State.logs.length && !State.costs.length) { if(div) div.style.display = 'none'; return; }
@@ -928,7 +923,7 @@ function updateStats() {
     let evEnergyCost = 0; 
     let kwhTot = 0;
     State.logs.forEach(l => { 
-        evEnergyCost += (l.total || l.kwh*l.price); 
+        evEnergyCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price))); 
         kwhTot += parseFloat(l.kwh); 
     });
     
@@ -937,24 +932,26 @@ function updateStats() {
     let iceMaint = 0;
 
     State.costs.forEach(c => {
-        const amount = parseFloat(c.amount);
+        const amount = parseFloat(c.amount) || 0;
         if(c.car === 'ice') {
             iceMaint += amount;
         } else {
-            // Всичко друго е EV (вкл. старите записи)
+            // Всичко друго е EV
             evMaint += amount;
         }
     });
 
     // 3. Сравнение с теоретичен бензин
-    const miles = kwhTot * State.settings.evEff;
-    const iceFuelTheoretical = (miles / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
+    const evEff = State.settings.evEff || 3.5;
+    const iceMpg = State.settings.iceMpg || 45;
+    const fuelPrice = State.settings.fuelPrice || 1.45;
+
+    const miles = kwhTot * evEff;
+    const iceFuelTheoretical = (miles / iceMpg) * 4.54609 * fuelPrice;
     
     // ОБЩО
     const totalEV = evEnergyCost + evMaint;
-    // Тук е малко tricky: ICE Total = Теоретичен Бензин (защото нямаме реален log) + Реална Поддръжка
     const totalICE = iceFuelTheoretical + iceMaint;
-    
     const savings = totalICE - totalEV;
 
     // --- HTML RENDER ---
@@ -962,12 +959,12 @@ function updateStats() {
     setText('stat-miles', miles.toFixed(0));
     
     // Лява колона (EV)
-    setText('stat-ev-charge', '£'+evEnergyCost.toFixed(2)); // Ток
-    setText('stat-ev-maint', '£'+evMaint.toFixed(2));     // Поддръжка
+    setText('stat-ev-charge', '£'+evEnergyCost.toFixed(2));
+    setText('stat-ev-maint', '£'+evMaint.toFixed(2));
     
     // Дясна колона (ICE)
-    setText('stat-ice-fuel', '£'+iceFuelTheoretical.toFixed(2)); // Теоретичен Бензин
-    setText('stat-ice-maint', '£'+iceMaint.toFixed(2));          // Реална поддръжка
+    setText('stat-ice-fuel', '£'+iceFuelTheoretical.toFixed(2));
+    setText('stat-ice-maint', '£'+iceMaint.toFixed(2));
 
     const card = document.getElementById('tco-card');
     if(card) {
@@ -986,7 +983,61 @@ function updateStats() {
         `;
     }
     
-    // Update Chart if exists
-    if (typeof Chart !== 'undefined' && typeof renderChart === 'function') renderChart();
+    // Рисуване на графиката с новите изчислени променливи
+    if (typeof Chart !== 'undefined') {
+        renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
+    }
+}
+
+function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
+    const canvas = document.getElementById('compareChart') || document.querySelector('canvas');
+    if (!canvas) return;
+
+    // Унищожаваме старата графика, ако съществува
+    if (compareChart) {
+        compareChart.destroy();
+    }
+
+    // Рисуваме нова Stacked Bar Chart (Стълбчета едно върху друго)
+    compareChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: ['Моята Кола (EV)', 'Алтернатива (ICE)'],
+            datasets: [
+                {
+                    label: 'Движение (Ток / Бензин)',
+                    data: [evEnergyCost, iceFuelTheoretical],
+                    backgroundColor: ['#4CAF50', '#f44336'], // Зелено / Червено
+                    borderWidth: 0
+                },
+                {
+                    label: 'Поддръжка (Сервиз, Гуми)',
+                    data: [evMaint, iceMaint],
+                    backgroundColor: ['#81C784', '#e57373'], // Светлозелено / Светлочервено
+                    borderWidth: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    stacked: true, 
+                    ticks: { color: '#ccc' }
+                },
+                y: { 
+                    stacked: true, 
+                    beginAtZero: true,
+                    ticks: { color: '#ccc' }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            }
+        }
+    });
 }
 //Тук завършва CHART & STATS LOGIC
