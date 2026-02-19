@@ -536,11 +536,24 @@ function renderLogList() {
 //Тук завършва function renderLogList
 
 //От тук започва function renderCostsList (Списък разходи и форма)
+//От тук започва function renderCostsList (Списък разходи и форма)
 function renderCostsList() {
     const div = document.getElementById('costs') || document.getElementById('costsList');
     if (!div) return;
 
-    // --- 1. КАЛКУЛАЦИЯ ---
+    // --- 0. MIGRATION (Автоматично поправяне на стари записи) ---
+    // Ако има записи без поле 'car', приемаме че са за EV
+    let migrationNeeded = false;
+    State.costs.forEach(c => {
+        if (!c.car) { c.car = 'ev'; migrationNeeded = true; }
+    });
+    if (migrationNeeded) {
+        console.log("Migrating old costs to EV...");
+        // Записваме промените тихо в базата, за да не пита всеки път
+        State.costs.forEach(c => { if(!c.car) dbUpdateCost(c.id, {car: 'ev'}); });
+    }
+
+    // --- 1. КАЛКУЛАЦИЯ (Само за EV - Ток vs Бензин) ---
     const ICE_MPG = 45; 
     const ICE_FUEL_PRICE = 1.45;
     const LITERS_PER_GALLON = 4.54609;
@@ -548,6 +561,7 @@ function renderCostsList() {
     let totalEvCost = 0;
     let totalMiles = 0;
     
+    // Смятаме само от ЛОГОВЕТЕ (Зарежданията)
     const sortedLogs = [...State.logs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     for(let i = 0; i < sortedLogs.length; i++) {
@@ -574,10 +588,11 @@ function renderCostsList() {
     const icePercent = maxVal > 0 ? (totalIceCost / maxVal) * 100 : 0;
     const evPercent = maxVal > 0 ? (totalEvCost / maxVal) * 100 : 0;
 
-    // --- 2. HTML ---
+    // --- 2. HTML (Горна част - Спестявания от Гориво) ---
     let html = `
     <div style="background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
-        <h3 style="margin:0; color:#888; font-size: 0.9rem; text-transform: uppercase;">Финансов Баланс (Гориво)</h3>
+        <h3 style="margin:0; color:#888; font-size: 0.9rem; text-transform: uppercase;">⚡ Икономия от Гориво (EV)</h3>
+        
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
             <div>
                 <div style="font-size:2rem; font-weight:bold; color: ${savedColor};">
@@ -611,10 +626,22 @@ function renderCostsList() {
     
     <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
 
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <button id="btn-select-ev" class="tabbtn active" style="flex:1; border-radius:8px;">⚡ EV</button>
+        <button id="btn-select-ice" class="tabbtn" style="flex:1; border-radius:8px;">⛽ ICE</button>
+    </div>
+    <input type="hidden" id="cost-car-type" value="ev">
+
     <div class="input-group"><label>Категория</label>
         <select id="cost-cat" class="input-field">
-            <option>Service</option><option>Tires</option><option>Insurance</option>
-            <option>Tax</option><option>Repair</option><option>Accessories</option><option>Other</option>
+            <option>Service</option>
+            <option>Tires</option>
+            <option>Insurance</option>
+            <option>Tax</option>
+            <option>Repair</option>
+            <option>Parts</option>
+            <option>Accessories</option>
+            <option>Other</option>
         </select>
     </div>
     <div class="input-group"><label>Дата</label><input type="date" id="cost-date" class="input-field"></div>
@@ -625,7 +652,7 @@ function renderCostsList() {
     <button id="updateCostBtn" class="primary-btn" style="margin-top:10px; display:none; background:#FF9800;">Update Cost</button>
     
     <div style="margin-top:30px;">
-        <h3 style="border-left: 4px solid #FF9800; padding-left: 10px; margin-bottom:15px;">История на разходите</h3>
+        <h3 style="border-left: 4px solid #FF9800; padding-left: 10px; margin-bottom:15px;">История на поддръжката</h3>
         <div id="costListContainer"></div>
     </div>`;
 
@@ -634,14 +661,34 @@ function renderCostsList() {
     const dInput = document.getElementById('cost-date');
     if(dInput) dInput.valueAsDate = new Date();
 
+    // ЛОГИКА ЗА БУТОНИТЕ EV / ICE
+    const btnEv = document.getElementById('btn-select-ev');
+    const btnIce = document.getElementById('btn-select-ice');
+    const carInput = document.getElementById('cost-car-type');
+
+    btnEv.onclick = () => {
+        carInput.value = 'ev';
+        btnEv.classList.add('active'); btnIce.classList.remove('active');
+        btnEv.style.background = '#4CAF50'; btnIce.style.background = '#333';
+    };
+    btnIce.onclick = () => {
+        carInput.value = 'ice';
+        btnIce.classList.add('active'); btnEv.classList.remove('active');
+        btnIce.style.background = '#FF9800'; btnEv.style.background = '#333';
+    };
+    // Initial style
+    btnEv.style.background = '#4CAF50';
+
     // ADD Logic
     document.getElementById('addCostBtn').onclick = () => {
         const amount = parseFloat(document.getElementById('cost-amount').value);
         const cat = document.getElementById('cost-cat').value;
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
+        const car = document.getElementById('cost-car-type').value; // 'ev' or 'ice'
+
         if(!amount || !date) return alert('Въведете сума и дата');
-        dbAddCost({ id: Date.now(), car: 'EV', amount, category: cat, date, note });
+        dbAddCost({ id: Date.now(), car, amount, category: cat, date, note });
     };
 
     // UPDATE Logic
@@ -651,8 +698,9 @@ function renderCostsList() {
         const cat = document.getElementById('cost-cat').value;
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
+        const car = document.getElementById('cost-car-type').value;
         
-        const updatedCost = { id: State.editCostId, car: 'EV', amount, category: cat, date, note };
+        const updatedCost = { id: State.editCostId, car, amount, category: cat, date, note };
         dbDeleteCost(State.editCostId, false);
         setTimeout(() => dbAddCost(updatedCost), 500); 
     };
@@ -664,17 +712,29 @@ function renderCostsList() {
 
     sortedCosts.forEach(c => {
         const catName = c.category || c.cat || c.type || 'Other';
-        let icon = '🔧';
-        if(catName === 'Tires') icon = '🛞';
-        if(catName === 'Insurance') icon = '📄';
-        if(catName === 'Other') icon = '⚡';
+        const carType = c.car || 'ev'; // Fallback if missing
+        
+        // Определяне на икона и цвят според колата
+        let carIcon = '⚡';
+        let carColor = '#4CAF50'; // Green for EV
+        if(carType === 'ice') {
+            carIcon = '⛽';
+            carColor = '#FF9800'; // Orange for ICE
+        }
+
+        let catIcon = '🔧';
+        if(catName === 'Tires') catIcon = '🛞';
+        if(catName === 'Insurance') catIcon = '📄';
+        if(catName === 'Other') catIcon = '📦';
 
         listHtml += `
-        <div class="log-entry" style="border-left: 3px solid #FF9800;">
+        <div class="log-entry" style="border-left: 3px solid ${carColor};">
             <div class="log-info">
                 <div class="log-main-row">
                     <span style="font-weight:bold;">£${parseFloat(c.amount).toFixed(2)}</span>
-                    <span style="color:#FF9800; font-size:0.9rem;"> ${icon} ${catName}</span>
+                    <span style="font-size:0.9rem; margin-left:10px;">
+                        <span style="color:${carColor}; font-weight:bold;">${carIcon}</span> ${catIcon} ${catName}
+                    </span>
                 </div>
                 <div class="log-sub-row"><span>${c.date}</span></div>
                 ${c.note ? `<div class="log-note">${c.note}</div>` : ''}
@@ -687,6 +747,7 @@ function renderCostsList() {
     });
     listDiv.innerHTML = listHtml || '<p style="text-align:center; color:#666;">Няма разходи.</p>';
 
+    // LISTENERS FOR EDIT/DELETE
     sortedCosts.forEach(c => {
         document.getElementById(`del-cost-${c.id}`).onclick = () => { if(confirm('Delete?')) dbDeleteCost(c.id); };
         document.getElementById(`edit-cost-${c.id}`).onclick = () => {
@@ -696,6 +757,12 @@ function renderCostsList() {
             const catName = c.category || c.cat || c.type || 'Other';
             const sel = document.getElementById('cost-cat');
             for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === catName) sel.selectedIndex = i; }
+            
+            // Set Car Type Button
+            const carType = c.car || 'ev';
+            if(carType === 'ice') btnIce.click();
+            else btnEv.click();
+
             State.editCostId = c.id;
             document.getElementById('addCostBtn').style.display = 'none';
             document.getElementById('updateCostBtn').style.display = 'block';
@@ -703,6 +770,7 @@ function renderCostsList() {
         };
     });
 }
+//Тук завършва function renderCostsList
 //Тук завършва function renderCostsList
 
 //От тук започва GARAGE LOGIC (Гараж и Напомняния)
@@ -850,110 +918,75 @@ function bindChartControls() {
     bMonth.addEventListener('click', () => { State.chartMode = 'monthly'; bMonth.classList.add('active'); bCum.classList.remove('active'); renderChart(); });
 }
 
+//От тук започва CHART & STATS LOGIC (Графики и Статистика)
 function updateStats() {
     const div = document.getElementById('tco-dashboard');
     if(!State.logs.length && !State.costs.length) { if(div) div.style.display = 'none'; return; }
     if(div) div.style.display = 'block';
 
-    let evCharge = 0, kwhTot = 0;
-    State.logs.forEach(l => { evCharge += (l.total || l.kwh*l.price); kwhTot += parseFloat(l.kwh); });
+    // 1. Смятаме ТОК (EV Energy)
+    let evEnergyCost = 0; 
+    let kwhTot = 0;
+    State.logs.forEach(l => { 
+        evEnergyCost += (l.total || l.kwh*l.price); 
+        kwhTot += parseFloat(l.kwh); 
+    });
     
-    let evMaint = 0, iceMaint = 0;
+    // 2. Смятаме ПОДДРЪЖКА (EV vs ICE)
+    let evMaint = 0;
+    let iceMaint = 0;
+
     State.costs.forEach(c => {
-        if(c.target === 'ice') iceMaint += parseFloat(c.amount);
-        else evMaint += parseFloat(c.amount);
+        const amount = parseFloat(c.amount);
+        if(c.car === 'ice') {
+            iceMaint += amount;
+        } else {
+            // Всичко друго е EV (вкл. старите записи)
+            evMaint += amount;
+        }
     });
 
+    // 3. Сравнение с теоретичен бензин
     const miles = kwhTot * State.settings.evEff;
-    const iceFuel = (miles / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
-    const totalEV = evCharge + evMaint;
-    const totalICE = iceFuel + iceMaint;
+    const iceFuelTheoretical = (miles / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
+    
+    // ОБЩО
+    const totalEV = evEnergyCost + evMaint;
+    // Тук е малко tricky: ICE Total = Теоретичен Бензин (защото нямаме реален log) + Реална Поддръжка
+    const totalICE = iceFuelTheoretical + iceMaint;
+    
     const savings = totalICE - totalEV;
 
+    // --- HTML RENDER ---
     const setText = (id, txt) => { const e=document.getElementById(id); if(e) e.innerText=txt; };
     setText('stat-miles', miles.toFixed(0));
-    setText('stat-ev-charge', '£'+evCharge.toFixed(2));
-    setText('stat-ev-maint', '£'+evMaint.toFixed(2));
-    setText('stat-ice-fuel', '£'+iceFuel.toFixed(2));
-    setText('stat-ice-maint', '£'+iceMaint.toFixed(2));
+    
+    // Лява колона (EV)
+    setText('stat-ev-charge', '£'+evEnergyCost.toFixed(2)); // Ток
+    setText('stat-ev-maint', '£'+evMaint.toFixed(2));     // Поддръжка
+    
+    // Дясна колона (ICE)
+    setText('stat-ice-fuel', '£'+iceFuelTheoretical.toFixed(2)); // Теоретичен Бензин
+    setText('stat-ice-maint', '£'+iceMaint.toFixed(2));          // Реална поддръжка
 
     const card = document.getElementById('tco-card');
     if(card) {
         const color = savings >= 0 ? '#4CAF50' : '#f44336';
         card.style.border = `2px solid ${color}`;
         card.innerHTML = `
-            <div style="color:#ccc; font-size:0.9em">Общ Баланс</div>
-            <div style="font-size:1.8em; font-weight:bold; color:${color}; margin:5px 0">
+            <div style="color:#ccc; font-size:0.9em; text-transform:uppercase;">Общ Баланс (ТCO)</div>
+            <div style="font-size:2em; font-weight:bold; color:${color}; margin:10px 0">
                 ${savings>0?'+':''}£${savings.toFixed(2)}
             </div>
-            <div style="color:#666; font-size:0.8em">ICE (£${totalICE.toFixed(0)}) vs EV (£${totalEV.toFixed(0)})</div>
+            <div style="display:flex; justify-content:space-between; color:#888; font-size:0.85rem; margin-top:5px;">
+                <span>⚡ EV: £${totalEV.toFixed(0)}</span>
+                <span>⛽ ICE: £${totalICE.toFixed(0)}</span>
+            </div>
+            <div style="font-size:0.75rem; color:#666; margin-top:5px;">(Вкл. Гориво + Поддръжка)</div>
         `;
     }
-    if (typeof Chart !== 'undefined') renderChart();
-}
-
-function renderChart() {
-    const ctx = document.getElementById('tcoChart');
-    if(!ctx) return;
-    if(window.myChart) window.myChart.destroy();
-
-    let dataSets = [], labels = [];
-
-    if (State.chartMode === 'cumulative') {
-        let events = [];
-        State.logs.forEach(l => events.push({ date: l.date, ev: (l.total||l.kwh*l.price), ice: (l.kwh*State.settings.evEff/State.settings.iceMpg)*4.54609*State.settings.fuelPrice }));
-        State.costs.forEach(c => events.push({ date: c.date, ev: (c.target!=='ice'?parseFloat(c.amount):0), ice: (c.target==='ice'?parseFloat(c.amount):0) }));
-        events.sort((a,b) => new Date(a.date) - new Date(b.date));
-        
-        let cEv=0, cIce=0, dEv=[], dIce=[];
-        events.forEach(e => {
-            cEv += e.ev; cIce += e.ice;
-            labels.push(e.date); dEv.push(cEv); dIce.push(cIce);
-        });
-
-        dataSets = [
-            { label: 'ICE (Cumul)', data: dIce, borderColor: '#f44336', backgroundColor: '#f44336', fill: false, pointRadius: 0, type: 'line' },
-            { label: 'EV (Cumul)', data: dEv, borderColor: '#4CAF50', backgroundColor: '#4CAF50', fill: false, pointRadius: 0, type: 'line' }
-        ];
-
-    } else {
-        let monthly = {}; 
-        
-        State.logs.forEach(l => {
-            const m = l.date.substring(0, 7);
-            if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
-            monthly[m].ev += (l.total || l.kwh*l.price);
-            monthly[m].ice += (l.kwh * State.settings.evEff / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
-        });
-
-        State.costs.forEach(c => {
-            const m = c.date.substring(0, 7);
-            if(!monthly[m]) monthly[m] = { ev: 0, ice: 0 };
-            if(c.target === 'ice') monthly[m].ice += parseFloat(c.amount);
-            else monthly[m].ev += parseFloat(c.amount);
-        });
-
-        labels = Object.keys(monthly).sort();
-        let dEv = [], dIce = [];
-        labels.forEach(m => {
-            dEv.push(monthly[m].ev);
-            dIce.push(monthly[m].ice);
-        });
-
-        dataSets = [
-            { label: 'ICE Cost', data: dIce, backgroundColor: '#f44336', borderColor: '#f44336', borderWidth: 1 },
-            { label: 'EV Cost', data: dEv, backgroundColor: '#4CAF50', borderColor: '#4CAF50', borderWidth: 1 }
-        ];
-    }
-
-    window.myChart = new Chart(ctx, {
-        type: State.chartMode === 'cumulative' ? 'line' : 'bar',
-        data: { labels: labels, datasets: dataSets },
-        options: { 
-            responsive: true, maintainAspectRatio: false,
-            scales: { x: { display: State.chartMode !== 'cumulative' }, y: { grid: { color: '#333' } } },
-            plugins: { legend: { display: true, labels: { color: '#ccc' } } }
-        }
-    });
+    
+    // Update Chart if exists
+    if (typeof Chart !== 'undefined' && typeof renderChart === 'function') renderChart();
 }
 //Тук завършва CHART & STATS LOGIC
