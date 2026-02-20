@@ -1,6 +1,5 @@
-/* main.js - Version: Full Comments & Sections */
+/* main.js - Version: Full, Fixed Dynamic Home Price & Garage Toggle */
 
-//От тук започват IMPORT библиотеките
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, setDoc, updateDoc, enableIndexedDbPersistence 
@@ -8,9 +7,7 @@ import {
 import { 
     getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-//Тук завършват IMPORT библиотеките
 
-//От тук започва FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyA-FbmvdK3eaYUsaT9Iqc3dUILH4rYDe8U",
   authDomain: "ev-log-2487f.firebaseapp.com",
@@ -28,23 +25,21 @@ const provider = new GoogleAuthProvider();
 enableIndexedDbPersistence(db).catch((err) => {
     console.log("Persistence logic:", err.code);
 });
-//Тук завършва FIREBASE CONFIG
 
-//От тук започва APP STATE (Състояние на приложението)
+// Състояние на приложението (Добавена homePrice)
 const State = {
     user: null,
     logs: [],
     costs: [],
     garage: { ev: {}, ice: {} },
-    settings: { evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
+    settings: { homePrice: 0.24, evEff: 3.0, iceMpg: 44, fuelPrice: 1.45 },
     currentGarageTab: 'ev',
     editLogId: null,
     editCostId: null,
     chartMode: 'cumulative' 
 };
-//Тук завършва APP STATE
 
-//От тук започва AUTH LOGIC (Логин и Логаут)
+// AUTH LOGIC
 const loginScreen = document.getElementById('login-screen');
 const appContent = document.getElementById('app-content');
 const btnLogin = document.getElementById('btnLogin');
@@ -71,15 +66,13 @@ onAuthStateChanged(auth, (user) => {
         appContent.style.display = 'none';
     }
 });
-//Тук завършва AUTH LOGIC
 
-//От тук започва function initDataListeners (Слушатели за данни)
+// DATA LISTENERS
 let unsubscribeLogs, unsubscribeCosts, unsubscribeGarage, unsubscribeSettings;
 
 function initDataListeners() {
     const uid = State.user.uid;
 
-    // Logs Listener
     const qLogs = query(collection(db, "logs"), where("uid", "==", uid));
     unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
         State.logs = [];
@@ -90,7 +83,6 @@ function initDataListeners() {
         updateStats();
     });
 
-    // Costs Listener
     const qCosts = query(collection(db, "costs"), where("uid", "==", uid));
     unsubscribeCosts = onSnapshot(qCosts, (snapshot) => {
         State.costs = [];
@@ -100,7 +92,6 @@ function initDataListeners() {
         updateStats();
     });
 
-    // Garage Listener
     const qGarage = query(collection(db, "garage"), where("uid", "==", uid));
     unsubscribeGarage = onSnapshot(qGarage, (snapshot) => {
         State.garage = { ev: {}, ice: {} };
@@ -112,26 +103,24 @@ function initDataListeners() {
         loadGarageDataToUI();
     });
 
-    // Settings Listener
     unsubscribeSettings = onSnapshot(doc(db, "settings", uid), (docSnap) => {
         if (docSnap.exists()) {
-            State.settings = docSnap.data();
+            State.settings = { ...State.settings, ...docSnap.data() };
             loadSettingsToUI();
             updateStats();
+        } else {
+            loadSettingsToUI();
         }
     });
 }
-//Тук завършва function initDataListeners
 
-//От тук започват DATABASE ACTIONS (Функции за запис и триене)
+// DATABASE ACTIONS
 async function dbAddLog(entry) { try { await addDoc(collection(db, "logs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
 async function dbUpdateLog(id, entry) { try { await updateDoc(doc(db, "logs", id), entry); } catch (e) { alert("Error: " + e.message); } }
 async function dbDeleteLog(id) { try { await deleteDoc(doc(db, "logs", id)); } catch(e) { console.error(e); } }
-
 async function dbAddCost(entry) { try { await addDoc(collection(db, "costs"), { ...entry, uid: State.user.uid }); } catch (e) { alert("Error: " + e.message); } }
 async function dbUpdateCost(id, entry) { try { await updateDoc(doc(db, "costs", id), entry); } catch (e) { alert("Error: " + e.message); } }
 async function dbDeleteCost(id) { try { await deleteDoc(doc(db, "costs", id)); } catch(e) { console.error(e); } }
-
 async function dbSaveGarage(type, data) {
     const docId = `${State.user.uid}_${type}`;
     try { await setDoc(doc(db, "garage", docId), { ...data, uid: State.user.uid, carType: type }); alert("Garage Saved!"); } catch (e) { alert("Error: " + e.message); }
@@ -139,9 +128,8 @@ async function dbSaveGarage(type, data) {
 async function dbSaveSettings(settings) {
     try { await setDoc(doc(db, "settings", State.user.uid), settings); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
 }
-//Тук завършват DATABASE ACTIONS
 
-//От тук започват IMPORT / EXPORT CSV функции
+// EXPORT/IMPORT
 function exportToCSV(data, filename) {
     if (!data || !data.length) { alert("Няма данни."); return; }
     let headers = [];
@@ -159,7 +147,7 @@ function exportToCSV(data, filename) {
             ].join(",");
         } else {
             rowStr = [
-                row.date, row.amount, `"${row.cat}"`, `"${row.target}"`,
+                row.date, row.amount, `"${row.cat || row.category}"`, `"${row.target || row.car}"`,
                 `"${(row.note || '').replace(/"/g, '""')}"`
             ].join(",");
         }
@@ -170,7 +158,6 @@ function exportToCSV(data, filename) {
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
     link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -179,23 +166,17 @@ function exportToCSV(data, filename) {
 function parseCSV(text) {
     const lines = text.split('\n').filter(l => l.trim() !== '');
     if(lines.length < 2) return [];
-    
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const result = [];
-
     for(let i=1; i<lines.length; i++) {
-        let row = [];
-        let currentToken = '';
-        let insideQuote = false;
-        
+        let row = []; let currentToken = ''; let insideQuote = false;
         for(let char of lines[i]) {
-            if(char === '"') { insideQuote = !insideQuote; } 
+            if(char === '"') insideQuote = !insideQuote; 
             else if(char === ',' && !insideQuote) { row.push(currentToken); currentToken = ''; } 
-            else { currentToken += char; }
+            else currentToken += char;
         }
         row.push(currentToken);
         row = row.map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
-        
         let obj = {};
         headers.forEach((h, index) => { if(row[index] !== undefined) obj[h] = row[index]; });
         result.push(obj);
@@ -208,33 +189,22 @@ async function importFromCSV(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const text = e.target.result;
-            const parsed = parseCSV(text);
+            const parsed = parseCSV(e.target.result);
             if(!parsed.data.length) return alert("Празен или невалиден файл.");
             if(!confirm(`Открити са ${parsed.data.length} записа (${parsed.type}). Да ги добавя ли?`)) return;
-
             let count = 0;
             if(parsed.type === 'logs') {
                 for(let row of parsed.data) {
                     await dbAddLog({
-                        date: row.Date,
-                        type: row.Type,
-                        kwh: parseFloat(row.KWh),
-                        price: parseFloat(row.Price),
-                        total: parseFloat(row.Total),
-                        note: row.Note,
-                        odo: row.Odometer ? parseFloat(row.Odometer) : null
+                        date: row.Date, type: row.Type, kwh: parseFloat(row.KWh), price: parseFloat(row.Price),
+                        total: parseFloat(row.Total), note: row.Note, odo: row.Odometer ? parseFloat(row.Odometer) : null
                     });
                     count++;
                 }
             } else {
                 for(let row of parsed.data) {
                     await dbAddCost({
-                        date: row.Date,
-                        amount: parseFloat(row.Amount),
-                        cat: row.Category,
-                        target: row.Target,
-                        note: row.Note
+                        date: row.Date, amount: parseFloat(row.Amount), cat: row.Category, car: row.Target, note: row.Note
                     });
                     count++;
                 }
@@ -245,9 +215,8 @@ async function importFromCSV(file) {
     };
     reader.readAsText(file);
 }
-//Тук завършват IMPORT / EXPORT CSV функции
 
-//От тук започва function initUI (Старт на интерфейса)
+// UI INIT
 function initUI() {
     bindNav();
     bindLogForm();
@@ -255,14 +224,11 @@ function initUI() {
     bindSettings();
     bindCompare();
     bindChartControls();
-    
     const today = new Date().toISOString().split('T')[0];
     if(document.getElementById('date')) document.getElementById('date').value = today;
     if(document.getElementById('c_date')) document.getElementById('c_date').value = today;
 }
-//Тук завършва function initUI
 
-//От тук започва function bindNav (Навигация)
 function bindNav() {
     document.querySelectorAll('.tabbtn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -276,27 +242,18 @@ function bindNav() {
         });
     });
 }
-//Тук завършва function bindNav
 
-//От тук започва function renderHomeDashboard (Начален екран)
 function renderHomeDashboard() {
     const div = document.getElementById('home-stats');
     if(!div) return;
-
     if(State.logs.length === 0) {
         div.innerHTML = `<div style="grid-column: span 2; text-align:center; color:#666; font-style:italic;">Няма данни</div>`;
         return;
     }
-
-    // 1. Current Month Filter
     const now = new Date();
     const currentMonthKey = now.toISOString().slice(0, 7);
     const monthLogs = State.logs.filter(l => l.date.startsWith(currentMonthKey));
-    
-    // 2. Calculate Totals
-    let totalCost = 0;
-    let totalKwh = 0;
-    let totalDist = 0;
+    let totalCost = 0, totalKwh = 0, totalDist = 0;
 
     monthLogs.forEach(l => {
         totalCost += (l.total || l.kwh * l.price);
@@ -315,44 +272,32 @@ function renderHomeDashboard() {
     });
 
     const avgEff = totalKwh > 0 && totalDist > 0 ? (totalDist / totalKwh).toFixed(1) : "---";
-
-    // 3. Last Charge Logic
     const lastLogDate = new Date(State.logs[0].date);
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const logMidnight = new Date(lastLogDate.getFullYear(), lastLogDate.getMonth(), lastLogDate.getDate());
-    const diffTime = Math.abs(todayMidnight - logMidnight);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    let daysText = "Днес";
-    if(diffDays === 1) daysText = "Вчера";
-    if(diffDays > 1) daysText = `${diffDays} дни`;
+    const diffDays = Math.ceil(Math.abs(todayMidnight - logMidnight) / (1000 * 60 * 60 * 24)); 
+    let daysText = diffDays === 0 ? "Днес" : (diffDays === 1 ? "Вчера" : `${diffDays} дни`);
 
-    // 4. Render HTML
     div.innerHTML = `
         <div style="background:#222; padding:15px; border-radius:12px; border-left:5px solid #4CAF50; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Този Месец</div>
-            
+            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px;">Този Месец</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px;">
                 <span style="font-size:1.6rem; font-weight:800; color:#fff;">£${totalCost.toFixed(2)}</span>
-                <span style="font-size:0.9rem; color:#4CAF50; font-weight:bold;">${avgEff} <span style="font-size:0.7em; font-weight:normal; color:#888;">mi/kWh</span></span>
+                <span style="font-size:0.9rem; color:#4CAF50; font-weight:bold;">${avgEff} mi/kWh</span>
             </div>
-            
             <div style="display:flex; justify-content:space-between; border-top:1px solid #333; padding-top:5px; font-size:0.85rem; color:#ccc;">
-                <span>${totalDist > 0 ? totalDist : 0} mi</span>
-                <span>${totalKwh.toFixed(0)} kWh</span>
+                <span>${totalDist > 0 ? totalDist : 0} mi</span><span>${totalKwh.toFixed(0)} kWh</span>
             </div>
         </div>
-
         <div style="background:#222; padding:15px; border-radius:12px; border-left:5px solid #2196F3; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Последно</div>
+            <div style="font-size:0.85rem; color:#aaa; margin-bottom:8px;">Последно</div>
             <div style="font-size:1.6rem; font-weight:800; color:#fff; margin-bottom:5px;">${daysText}</div>
             <div style="font-size:0.85rem; color:#888;">${State.logs[0].date}</div>
             <div style="margin-top:5px; font-size:0.85rem; color:#2196F3;">${State.logs[0].odo ? State.logs[0].odo + ' mi' : ''}</div>
         </div>
     `;
 }
-//Тук завършва function renderHomeDashboard
 
-//От тук започва function bindLogForm (Форма за зареждане)
 function bindLogForm() {
     const btnAdd = document.getElementById('addEntry');
     const typeSelect = document.getElementById('type');
@@ -361,39 +306,37 @@ function bindLogForm() {
     const odoInput = document.getElementById('odo');
     
     const syncPrice = () => {
-        const opt = typeSelect.options[typeSelect.selectedIndex];
         if (btnAdd.classList.contains("update-mode-btn")) return;
-
-        if(opt && opt.dataset.price) {
+        const opt = typeSelect.options[typeSelect.selectedIndex];
+        
+        // Взимане на динамичната цена за домашно зареждане
+        if (opt.value === "home" || opt.text.includes("Home") || opt.text.includes("Домашно")) {
+            priceInput.value = State.settings.homePrice || 0.24; 
+        } else if(opt && opt.dataset.price) {
             priceInput.value = opt.dataset.price;
-            priceInput.style.opacity = "1";
-            priceInput.style.background = "#2c2c2c";
-        } else {
-            priceInput.removeAttribute('readonly');
-            priceInput.style.opacity = "1";
-            priceInput.style.background = "#2c2c2c";
         }
+        
+        priceInput.style.opacity = "1";
+        priceInput.style.background = "#2c2c2c";
         updateLogPreview();
     };
 
     typeSelect.addEventListener('change', syncPrice);
     kwhInput.addEventListener('input', updateLogPreview);
     priceInput.addEventListener('input', updateLogPreview);
-    
-    if(!priceInput.value) syncPrice();
+    syncPrice();
 
     btnAdd.addEventListener('click', () => {
         const date = document.getElementById('date').value;
         const kwh = parseFloat(kwhInput.value);
         if (!priceInput.value) syncPrice();
-        
         const price = parseFloat(priceInput.value);
         const type = typeSelect.options[typeSelect.selectedIndex].text;
         const note = document.getElementById('note').value;
         const odo = odoInput.value ? parseFloat(odoInput.value) : null;
 
-        if(!date || isNaN(kwh) || isNaN(price)) return alert('Missing fields');
-        const entryData = { date, kwh, price, type, note, odo, total: kwh * price };
+        if(!date || isNaN(kwh) || isNaN(price)) return alert('Липсващи полета');
+        const entryData = { date, kwh, price, type, note, odo, total: Number((kwh * price).toFixed(2)) };
 
         if (State.editLogId) {
             dbUpdateLog(State.editLogId, entryData);
@@ -404,9 +347,7 @@ function bindLogForm() {
             dbAddLog(entryData);
         }
         
-        kwhInput.value = '';
-        odoInput.value = ''; 
-        document.getElementById('note').value = '';
+        kwhInput.value = ''; odoInput.value = ''; document.getElementById('note').value = '';
         document.getElementById('log-preview').style.display = 'none';
         syncPrice(); 
     });
@@ -418,9 +359,9 @@ function updateLogPreview() {
     const div = document.getElementById('log-preview');
     if(kwh <= 0 || price <= 0) { div.style.display = 'none'; return; }
 
-    const range = kwh * State.settings.evEff;
+    const range = kwh * (State.settings.evEff || 3.0);
     const costEV = kwh * price;
-    const costICE = (range / State.settings.iceMpg) * 4.54609 * State.settings.fuelPrice;
+    const costICE = (range / (State.settings.iceMpg || 45)) * 4.54609 * (State.settings.fuelPrice || 1.45);
     const diff = costICE - costEV;
     const isCheaper = diff > 0;
 
@@ -436,53 +377,35 @@ function updateLogPreview() {
             </div>
         </div>`;
 }
-//Тук завършва function bindLogForm
 
-//От тук започва function renderLogList (Списък зареждания)
 function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
 
-    const ICE_MPG = 45;
-    const ICE_FUEL_PRICE = 1.45;
+    // Динамични стойности от Settings
+    const ICE_MPG = State.settings.iceMpg || 45;
+    const ICE_FUEL_PRICE = State.settings.fuelPrice || 1.45;
     const LITERS_PER_GALLON = 4.54609;
 
     for(let i = 0; i < State.logs.length; i++) {
         const l = State.logs[i];
         const cost = l.total !== undefined ? l.total : (l.kwh * l.price);
-        
-        let distanceHtml = '';
-        let effHtml = '';
-        let savingsHtml = '';
+        let distanceHtml = '', effHtml = '', savingsHtml = '';
 
         if (l.odo) {
             let dist = 0;
             for(let j = i + 1; j < State.logs.length; j++) {
-                if(State.logs[j].odo) {
-                    dist = l.odo - State.logs[j].odo;
-                    break;
-                }
+                if(State.logs[j].odo) { dist = l.odo - State.logs[j].odo; break; }
             }
-            
             if(dist > 0) {
                 const efficiency = dist / l.kwh;
-                let effColor = '#888'; 
-                if(efficiency > 4.0) effColor = '#4CAF50'; 
-                else if(efficiency < 2.5) effColor = '#f44336'; 
-                
+                let effColor = efficiency > 4.0 ? '#4CAF50' : (efficiency < 2.5 ? '#f44336' : '#888');
                 distanceHtml = `<span style="color:#2196F3; font-weight:bold; font-size:0.9rem; margin-right:8px;">+${dist} mi</span>`;
                 effHtml = `<span style="color:${effColor}; font-size:0.8rem; background:#222; padding:2px 6px; border-radius:4px; margin-right:8px;">${efficiency.toFixed(1)} mi/kWh</span>`;
 
-                const gallonsNeeded = dist / ICE_MPG;
-                const litersNeeded = gallonsNeeded * LITERS_PER_GALLON;
-                const iceCost = litersNeeded * ICE_FUEL_PRICE;
+                const iceCost = (dist / ICE_MPG) * LITERS_PER_GALLON * ICE_FUEL_PRICE;
                 const savings = iceCost - cost;
-
-                if (savings >= 0) {
-                    savingsHtml = `<span style="color:#4CAF50; font-weight:bold; font-size:0.85rem;">SAVE £${savings.toFixed(2)}</span>`;
-                } else {
-                    savingsHtml = `<span style="color:#f44336; font-weight:bold; font-size:0.85rem;">LOSS £${Math.abs(savings).toFixed(2)}</span>`;
-                }
+                savingsHtml = `<span style="color:${savings>=0?'#4CAF50':'#f44336'}; font-weight:bold; font-size:0.85rem;">${savings>=0?'SAVE':'LOSS'} £${Math.abs(savings).toFixed(2)}</span>`;
             } else {
                 distanceHtml = `<span style="color:#666; font-size:0.9em; margin-right:10px;">${l.odo} mi</span>`;
             }
@@ -491,16 +414,9 @@ function renderLogList() {
         html += `
         <div class="log-entry" id="log-row-${l.id}">
             <div class="log-info">
-                <div class="log-main-row">
-                    <span>${l.kwh} kWh</span>
-                    <span class="cost-tag">£${cost.toFixed(2)}</span>
-                </div>
-                <div class="log-sub-row" style="margin-top:6px; align-items:center; flex-wrap:wrap;">
-                    ${distanceHtml} ${effHtml} ${savingsHtml}
-                </div>
-                <div class="log-sub-row" style="margin-top:4px;">
-                    <span>${l.date}</span><span> • </span><span>${l.type}</span>
-                </div>
+                <div class="log-main-row"><span>${l.kwh} kWh</span><span class="cost-tag">£${cost.toFixed(2)}</span></div>
+                <div class="log-sub-row" style="margin-top:6px; align-items:center; flex-wrap:wrap;">${distanceHtml} ${effHtml} ${savingsHtml}</div>
+                <div class="log-sub-row" style="margin-top:4px;"><span>${l.date}</span><span> • </span><span>${l.type}</span></div>
                 ${l.note ? `<div class="log-note">${l.note}</div>` : ''}
             </div>
             <div class="action-btn-group">
@@ -527,43 +443,26 @@ function renderLogList() {
             btn.innerText = "Update Entry";
             btn.classList.add("update-mode-btn");
             document.querySelector('#log').scrollIntoView({behavior: 'smooth'});
-            
-            const event = new Event('input');
-            document.getElementById('kwh').dispatchEvent(event);
+            document.getElementById('kwh').dispatchEvent(new Event('input'));
         });
     });
 }
-//Тук завършва function renderLogList
 
-//От тук започва function renderCostsList (Списък разходи и форма)
 function renderCostsList() {
-    const div = document.getElementById('costs') || document.getElementById('costsList');
+    const div = document.getElementById('costs');
     if (!div) return;
 
-    // --- 0. MIGRATION (Автоматично поправяне на стари записи) ---
-    let migrationNeeded = false;
-    State.costs.forEach(c => {
-        if (!c.car) { c.car = 'ev'; migrationNeeded = true; }
-    });
-    if (migrationNeeded) {
-        console.log("Migrating old costs to EV...");
-        State.costs.forEach(c => { if(!c.car) dbUpdateCost(c.id, {car: 'ev'}); });
-    }
-
-    // --- 1. КАЛКУЛАЦИЯ (Само за EV - Ток vs Бензин) ---
-    const ICE_MPG = 45; 
-    const ICE_FUEL_PRICE = 1.45;
+    // Динамични стойности от Settings
+    const ICE_MPG = State.settings.iceMpg || 45;
+    const ICE_FUEL_PRICE = State.settings.fuelPrice || 1.45;
     const LITERS_PER_GALLON = 4.54609;
 
-    let totalEvCost = 0;
-    let totalMiles = 0;
-    
+    let totalEvCost = 0, totalMiles = 0;
     const sortedLogs = [...State.logs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     for(let i = 0; i < sortedLogs.length; i++) {
         const l = sortedLogs[i];
         totalEvCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price)));
-
         if (l.odo) {
             for(let j = i + 1; j < sortedLogs.length; j++) {
                 if(sortedLogs[j].odo) {
@@ -575,25 +474,19 @@ function renderCostsList() {
         }
     }
 
-    const gallons = totalMiles / ICE_MPG;
-    const liters = gallons * LITERS_PER_GALLON;
-    const totalIceCost = liters * ICE_FUEL_PRICE;
+    const totalIceCost = (totalMiles / ICE_MPG) * LITERS_PER_GALLON * ICE_FUEL_PRICE;
     const totalSaved = totalIceCost - totalEvCost;
     const savedColor = totalSaved >= 0 ? '#4CAF50' : '#f44336'; 
     const maxVal = Math.max(totalIceCost, totalEvCost);
     const icePercent = maxVal > 0 ? (totalIceCost / maxVal) * 100 : 0;
     const evPercent = maxVal > 0 ? (totalEvCost / maxVal) * 100 : 0;
 
-    // --- 2. HTML (Горна част - Спестявания от Гориво) ---
     let html = `
     <div style="background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
         <h3 style="margin:0; color:#888; font-size: 0.9rem; text-transform: uppercase;">⚡ Икономия от Гориво (EV)</h3>
-        
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
             <div>
-                <div style="font-size:2rem; font-weight:bold; color: ${savedColor};">
-                    ${totalSaved >= 0 ? 'SAVE' : 'LOSS'} £${Math.abs(totalSaved).toFixed(2)}
-                </div>
+                <div style="font-size:2rem; font-weight:bold; color: ${savedColor};">${totalSaved >= 0 ? 'SAVE' : 'LOSS'} £${Math.abs(totalSaved).toFixed(2)}</div>
                 <div style="font-size:0.8rem; color:#aaa;">Спрямо ДВГ (${ICE_MPG} mpg)</div>
             </div>
             <div style="text-align:right;">
@@ -601,7 +494,6 @@ function renderCostsList() {
                 <div style="font-size:0.8rem; color:#666;">Общ пробег</div>
             </div>
         </div>
-
         <div style="margin-top:20px;">
             <div style="display:flex; align-items:center; margin-bottom:8px;">
                 <span style="width:30px; font-size:0.7rem; color:#aaa;">ICE</span>
@@ -619,75 +511,47 @@ function renderCostsList() {
             </div>
         </div>
     </div>
-    
     <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
-
     <div style="display:flex; gap:10px; margin-bottom:15px;">
-        <button id="btn-select-ev" class="tabbtn active" style="flex:1; border-radius:8px;">⚡ EV</button>
-        <button id="btn-select-ice" class="tabbtn" style="flex:1; border-radius:8px;">⛽ ICE</button>
+        <button id="btn-select-ev-cost" class="tabbtn active" style="flex:1; border-radius:8px; background:#4CAF50;">⚡ EV</button>
+        <button id="btn-select-ice-cost" class="tabbtn" style="flex:1; border-radius:8px; background:#333;">⛽ ICE</button>
     </div>
     <input type="hidden" id="cost-car-type" value="ev">
 
     <div class="input-group"><label>Категория</label>
         <select id="cost-cat" class="input-field">
-            <option>Service</option>
-            <option>Tires</option>
-            <option>Insurance</option>
-            <option>Tax</option>
-            <option>Repair</option>
-            <option>Parts</option>
-            <option>Accessories</option>
-            <option>Other</option>
+            <option>Service</option><option>Tires</option><option>Insurance</option><option>Tax</option>
+            <option>Repair</option><option>Parts</option><option>Accessories</option><option>Other</option>
         </select>
     </div>
     <div class="input-group"><label>Дата</label><input type="date" id="cost-date" class="input-field"></div>
     <div class="input-group"><label>Сума (£)</label><input type="number" id="cost-amount" class="input-field" placeholder="0.00" step="0.01"></div>
     <div class="input-group"><label>Описание</label><input type="text" id="cost-note" class="input-field" placeholder="Бележка..."></div>
-    
     <button id="addCostBtn" class="primary-btn" style="margin-top:10px;">Add Cost</button>
     <button id="updateCostBtn" class="primary-btn" style="margin-top:10px; display:none; background:#FF9800;">Update Cost</button>
-    
-    <div style="margin-top:30px;">
-        <h3 style="border-left: 4px solid #FF9800; padding-left: 10px; margin-bottom:15px;">История на поддръжката</h3>
-        <div id="costListContainer"></div>
-    </div>`;
-
+    <div style="margin-top:30px;"><h3 style="border-left: 4px solid #FF9800; padding-left: 10px; margin-bottom:15px;">История на поддръжката</h3><div id="costListContainer"></div></div>`;
     div.innerHTML = html;
 
     const dInput = document.getElementById('cost-date');
     if(dInput) dInput.valueAsDate = new Date();
 
-    // ЛОГИКА ЗА БУТОНИТЕ EV / ICE
-    const btnEv = document.getElementById('btn-select-ev');
-    const btnIce = document.getElementById('btn-select-ice');
+    const btnEvC = document.getElementById('btn-select-ev-cost');
+    const btnIceC = document.getElementById('btn-select-ice-cost');
     const carInput = document.getElementById('cost-car-type');
 
-    btnEv.onclick = () => {
-        carInput.value = 'ev';
-        btnEv.classList.add('active'); btnIce.classList.remove('active');
-        btnEv.style.background = '#4CAF50'; btnIce.style.background = '#333';
-    };
-    btnIce.onclick = () => {
-        carInput.value = 'ice';
-        btnIce.classList.add('active'); btnEv.classList.remove('active');
-        btnIce.style.background = '#FF9800'; btnEv.style.background = '#333';
-    };
-    // Initial style
-    btnEv.style.background = '#4CAF50';
+    btnEvC.onclick = () => { carInput.value = 'ev'; btnEvC.style.background = '#4CAF50'; btnIceC.style.background = '#333'; };
+    btnIceC.onclick = () => { carInput.value = 'ice'; btnIceC.style.background = '#FF9800'; btnEvC.style.background = '#333'; };
 
-    // ADD Logic
     document.getElementById('addCostBtn').onclick = () => {
         const amount = parseFloat(document.getElementById('cost-amount').value);
         const cat = document.getElementById('cost-cat').value;
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
         const car = document.getElementById('cost-car-type').value;
-
         if(!amount || !date) return alert('Въведете сума и дата');
-        dbAddCost({ id: Date.now(), car, amount, category: cat, date, note });
+        dbAddCost({ car, amount, category: cat, date, note });
     };
 
-    // UPDATE Logic
     document.getElementById('updateCostBtn').onclick = () => {
         if(!State.editCostId) return;
         const amount = parseFloat(document.getElementById('cost-amount').value);
@@ -695,68 +559,43 @@ function renderCostsList() {
         const note = document.getElementById('cost-note').value;
         const date = document.getElementById('cost-date').value;
         const car = document.getElementById('cost-car-type').value;
-        
-        const updatedCost = { id: State.editCostId, car, amount, category: cat, date, note };
-        dbDeleteCost(State.editCostId, false);
-        setTimeout(() => dbAddCost(updatedCost), 500); 
+        dbUpdateCost(State.editCostId, { car, amount, category: cat, date, note });
+        State.editCostId = null;
+        document.getElementById('addCostBtn').style.display = 'block';
+        document.getElementById('updateCostBtn').style.display = 'none';
+        document.getElementById('cost-amount').value = ''; document.getElementById('cost-note').value = '';
     };
 
-    // RENDER LIST
     const listDiv = document.getElementById('costListContainer');
     let listHtml = '';
     const sortedCosts = [...State.costs].sort((a,b) => new Date(b.date) - new Date(a.date));
 
     sortedCosts.forEach(c => {
-        const catName = c.category || c.cat || c.type || 'Other';
+        const catName = c.category || c.cat || 'Other';
         const carType = c.car || 'ev';
-        
-        let carIcon = '⚡';
-        let carColor = '#4CAF50';
-        if(carType === 'ice') {
-            carIcon = '⛽';
-            carColor = '#FF9800';
-        }
-
-        let catIcon = '🔧';
-        if(catName === 'Tires') catIcon = '🛞';
-        if(catName === 'Insurance') catIcon = '📄';
-        if(catName === 'Other') catIcon = '📦';
-
+        const carColor = carType === 'ice' ? '#FF9800' : '#4CAF50';
+        const carIcon = carType === 'ice' ? '⛽' : '⚡';
         listHtml += `
         <div class="log-entry" style="border-left: 3px solid ${carColor};">
             <div class="log-info">
-                <div class="log-main-row">
-                    <span style="font-weight:bold;">£${parseFloat(c.amount).toFixed(2)}</span>
-                    <span style="font-size:0.9rem; margin-left:10px;">
-                        <span style="color:${carColor}; font-weight:bold;">${carIcon}</span> ${catIcon} ${catName}
-                    </span>
-                </div>
+                <div class="log-main-row"><span style="font-weight:bold;">£${parseFloat(c.amount).toFixed(2)}</span><span style="font-size:0.9rem; margin-left:10px;"><span style="color:${carColor}; font-weight:bold;">${carIcon}</span> ${catName}</span></div>
                 <div class="log-sub-row"><span>${c.date}</span></div>
                 ${c.note ? `<div class="log-note">${c.note}</div>` : ''}
             </div>
-            <div class="action-btn-group">
-                <button class="edit-btn" id="edit-cost-${c.id}">✎</button>
-                <button class="delete-btn" id="del-cost-${c.id}">×</button>
-            </div>
+            <div class="action-btn-group"><button class="edit-btn" id="edit-cost-${c.id}">✎</button><button class="delete-btn" id="del-cost-${c.id}">×</button></div>
         </div>`;
     });
     listDiv.innerHTML = listHtml || '<p style="text-align:center; color:#666;">Няма разходи.</p>';
 
-    // LISTENERS FOR EDIT/DELETE
     sortedCosts.forEach(c => {
         document.getElementById(`del-cost-${c.id}`).onclick = () => { if(confirm('Delete?')) dbDeleteCost(c.id); };
         document.getElementById(`edit-cost-${c.id}`).onclick = () => {
             document.getElementById('cost-amount').value = c.amount;
             document.getElementById('cost-date').value = c.date;
             document.getElementById('cost-note').value = c.note || '';
-            const catName = c.category || c.cat || c.type || 'Other';
             const sel = document.getElementById('cost-cat');
-            for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === catName) sel.selectedIndex = i; }
-            
-            const carType = c.car || 'ev';
-            if(carType === 'ice') btnIce.click();
-            else btnEv.click();
-
+            for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === (c.category || c.cat)) sel.selectedIndex = i; }
+            if((c.car || 'ev') === 'ice') btnIceC.click(); else btnEvC.click();
             State.editCostId = c.id;
             document.getElementById('addCostBtn').style.display = 'none';
             document.getElementById('updateCostBtn').style.display = 'block';
@@ -764,57 +603,39 @@ function renderCostsList() {
         };
     });
 }
-//Тук завършва function renderCostsList
 
-//От тук започва GARAGE LOGIC (Гараж и Напомняния)
+// GARAGE LOGIC - Fixed Toggle IDs
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
     
-    btnEv.addEventListener('click', () => {
-        State.currentGarageTab = 'ev';
-        btnEv.classList.add('active'); btnIce.classList.remove('active');
-        document.getElementById('garage-title').innerText = '🔔 Напомняния (EV)';
-        loadGarageDataToUI();
-    });
-    
-    btnIce.addEventListener('click', () => {
-        State.currentGarageTab = 'ice';
-        btnIce.classList.add('active'); btnEv.classList.remove('active');
-        document.getElementById('garage-title').innerText = '🔔 Напомняния (ICE)';
-        loadGarageDataToUI();
-    });
+    if(btnEv && btnIce) {
+        btnEv.onclick = () => {
+            State.currentGarageTab = 'ev';
+            btnEv.classList.add('active'); btnIce.classList.remove('active');
+            document.getElementById('garage-title').innerText = '🔔 Напомняния (EV)';
+            loadGarageDataToUI();
+        };
+        btnIce.onclick = () => {
+            State.currentGarageTab = 'ice';
+            btnIce.classList.add('active'); btnEv.classList.remove('active');
+            document.getElementById('garage-title').innerText = '🔔 Напомняния (ICE)';
+            loadGarageDataToUI();
+        };
+    }
 
     document.getElementById('saveGarageManual').addEventListener('click', () => {
-        const ids = [
-            'g_insurance', 'g_mot', 'g_tax', 'g_service', 
-            'g_tire_date', 'g_tire_odo', 'g_tire_note',
-            'g_12v_date', 'g_filter_date', 'g_wipers_date',
-            'g_plate', 'g_vin', 'g_notes'
-        ];
-        
+        const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_tire_date', 'g_tire_odo', 'g_tire_note', 'g_12v_date', 'g_filter_date', 'g_wipers_date', 'g_plate', 'g_vin', 'g_notes'];
         let dataToSave = {};
-        ids.forEach(id => { 
-            const el = document.getElementById(id); 
-            if(el) dataToSave[id] = el.value; 
-        });
+        ids.forEach(id => { const el = document.getElementById(id); if(el) dataToSave[id] = el.value; });
         dbSaveGarage(State.currentGarageTab, dataToSave);
     });
 }
 
 function loadGarageDataToUI() {
     const currentData = State.garage[State.currentGarageTab] || {};
-    const ids = [
-        'g_insurance', 'g_mot', 'g_tax', 'g_service', 
-        'g_tire_date', 'g_tire_odo', 'g_tire_note',
-        'g_12v_date', 'g_filter_date', 'g_wipers_date',
-        'g_plate', 'g_vin', 'g_notes'
-    ];
-    
-    ids.forEach(id => { 
-        const el = document.getElementById(id); 
-        if(el) el.value = currentData[id] || ""; 
-    });
+    const ids = ['g_insurance', 'g_mot', 'g_tax', 'g_service', 'g_tire_date', 'g_tire_odo', 'g_tire_note', 'g_12v_date', 'g_filter_date', 'g_wipers_date', 'g_plate', 'g_vin', 'g_notes'];
+    ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = currentData[id] || ""; });
     calculateGarageStats();
 }
 
@@ -830,47 +651,30 @@ function calculateGarageStats() {
         else { el.innerText = `${diff} дни`; el.className = "status-badge status-ok"; }
     };
 
-    checkExpiry('g_insurance', 'status_insurance');
-    checkExpiry('g_mot', 'status_mot');
-    checkExpiry('g_tax', 'status_tax');
-    checkExpiry('g_service', 'status_service');
+    checkExpiry('g_insurance', 'status_insurance'); checkExpiry('g_mot', 'status_mot');
+    checkExpiry('g_tax', 'status_tax'); checkExpiry('g_service', 'status_service');
 
     const tireDiv = document.getElementById('stat_tires');
     const tireOdo = parseFloat(document.getElementById('g_tire_odo').value) || 0;
     const currentOdo = (State.logs.length > 0 && State.logs[0].odo) ? State.logs[0].odo : 0;
-    
-    let tireText = "";
-    if(tireOdo > 0 && currentOdo > 0) {
-        const driven = currentOdo - tireOdo;
-        tireText = `Изминати: ${driven} mi`;
-    }
-    tireDiv.innerText = tireText;
+    if(tireDiv) tireDiv.innerText = (tireOdo > 0 && currentOdo > 0) ? `Изминати: ${currentOdo - tireOdo} mi` : "";
 
     const checkAge = (inputId, outputId, warnYears) => {
         const val = document.getElementById(inputId).value;
         const el = document.getElementById(outputId);
         if(!val || !el) return;
-        const date = new Date(val);
-        const now = new Date();
-        const monthsDiff = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
-        let txt = "";
-        let color = "#aaa";
-        if(monthsDiff < 12) txt = `${monthsDiff} мес.`;
-        else txt = `${(monthsDiff/12).toFixed(1)} г.`;
-        if (monthsDiff > (warnYears * 12)) color = "#f44336"; 
-        el.innerText = `Възраст: ${txt}`;
-        el.style.color = color;
+        const monthsDiff = (new Date().getFullYear() - new Date(val).getFullYear()) * 12 + (new Date().getMonth() - new Date(val).getMonth());
+        el.innerText = `Възраст: ${monthsDiff < 12 ? monthsDiff + ' мес.' : (monthsDiff/12).toFixed(1) + ' г.'}`;
+        el.style.color = monthsDiff > (warnYears * 12) ? "#f44336" : "#aaa";
     };
-    checkAge('g_12v_date', 'stat_12v', 3);
-    checkAge('g_filter_date', 'stat_filter', 2);
-    checkAge('g_wipers_date', 'stat_wipers', 1);
+    checkAge('g_12v_date', 'stat_12v', 3); checkAge('g_filter_date', 'stat_filter', 2); checkAge('g_wipers_date', 'stat_wipers', 1);
 }
-//Тук завършва GARAGE LOGIC
 
-//От тук започва SETTINGS & COMPARE (Настройки и Калкулатор)
+// SETTINGS & COMPARE
 function bindSettings() {
     document.getElementById('saveCompareSettings').addEventListener('click', () => {
         const s = {
+            homePrice: parseFloat(document.getElementById('set_home_price').value) || 0.24,
             evEff: parseFloat(document.getElementById('set_ev_eff').value),
             iceMpg: parseFloat(document.getElementById('set_ice_mpg').value),
             fuelPrice: parseFloat(document.getElementById('set_fuel_price').value)
@@ -879,20 +683,23 @@ function bindSettings() {
     });
     document.getElementById('btnExportLogs').addEventListener('click', () => exportToCSV(State.logs, 'EV_Logs.csv'));
     document.getElementById('btnExportCosts').addEventListener('click', () => exportToCSV(State.costs, 'EV_Costs.csv'));
-    
-    document.getElementById('btnImport').addEventListener('click', () => {
-        const fileInput = document.getElementById('importFile');
-        importFromCSV(fileInput.files[0]);
-    });
+    document.getElementById('btnImport').addEventListener('click', () => importFromCSV(document.getElementById('importFile').files[0]));
+}
+
+function loadSettingsToUI() {
+    if(document.getElementById('set_home_price')) document.getElementById('set_home_price').value = State.settings.homePrice || 0.24;
+    if(document.getElementById('set_ev_eff')) document.getElementById('set_ev_eff').value = State.settings.evEff || 3.0;
+    if(document.getElementById('set_ice_mpg')) document.getElementById('set_ice_mpg').value = State.settings.iceMpg || 45;
+    if(document.getElementById('set_fuel_price')) document.getElementById('set_fuel_price').value = State.settings.fuelPrice || 1.45;
 }
 
 function bindCompare() {
     document.getElementById('btn-calc-trip').addEventListener('click', () => {
         const dist = parseFloat(document.getElementById('cmp-dist').value);
         if(!dist) return;
-        const evP = parseFloat(document.getElementById('price').value) || 0.56;
-        const evC = (dist/State.settings.evEff)*evP;
-        const iceC = (dist/State.settings.iceMpg)*4.54609*State.settings.fuelPrice;
+        const evP = parseFloat(document.getElementById('price').value) || (State.settings.homePrice || 0.24);
+        const evC = (dist/(State.settings.evEff || 3.0))*evP;
+        const iceC = (dist/(State.settings.iceMpg || 45))*4.54609*(State.settings.fuelPrice || 1.45);
         const diff = iceC - evC;
         document.getElementById('compare-result').innerHTML = `
             <div style="background:#222; padding:10px; margin-top:10px; border-radius:5px; border-left:4px solid ${diff>0?'#4CAF50':'#f44336'}">
@@ -901,10 +708,6 @@ function bindCompare() {
             </div>`;
     });
 }
-//Тук завършва SETTINGS & COMPARE
-
-//От тук започва CHART & STATS LOGIC (Графики и Статистика)
-let compareChart = null; // Глобална променлива за графиката
 
 function bindChartControls() {
     const bCum = document.getElementById('btn-chart-cum');
@@ -919,125 +722,46 @@ function updateStats() {
     if(!State.logs.length && !State.costs.length) { if(div) div.style.display = 'none'; return; }
     if(div) div.style.display = 'block';
 
-    // 1. Смятаме ТОК (EV Energy)
-    let evEnergyCost = 0; 
-    let kwhTot = 0;
-    State.logs.forEach(l => { 
-        evEnergyCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price))); 
-        kwhTot += parseFloat(l.kwh); 
-    });
+    let evEnergyCost = 0, kwhTot = 0, evMaint = 0, iceMaint = 0;
+    State.logs.forEach(l => { evEnergyCost += (l.total !== undefined ? parseFloat(l.total) : (parseFloat(l.kwh) * parseFloat(l.price))); kwhTot += parseFloat(l.kwh); });
+    State.costs.forEach(c => { const amount = parseFloat(c.amount) || 0; if(c.car === 'ice') iceMaint += amount; else evMaint += amount; });
+
+    const miles = kwhTot * (State.settings.evEff || 3.5);
+    const iceFuelTheoretical = (miles / (State.settings.iceMpg || 45)) * 4.54609 * (State.settings.fuelPrice || 1.45);
     
-    // 2. Смятаме ПОДДРЪЖКА (EV vs ICE)
-    let evMaint = 0;
-    let iceMaint = 0;
-
-    State.costs.forEach(c => {
-        const amount = parseFloat(c.amount) || 0;
-        if(c.car === 'ice') {
-            iceMaint += amount;
-        } else {
-            // Всичко друго е EV
-            evMaint += amount;
-        }
-    });
-
-    // 3. Сравнение с теоретичен бензин
-    const evEff = State.settings.evEff || 3.5;
-    const iceMpg = State.settings.iceMpg || 45;
-    const fuelPrice = State.settings.fuelPrice || 1.45;
-
-    const miles = kwhTot * evEff;
-    const iceFuelTheoretical = (miles / iceMpg) * 4.54609 * fuelPrice;
-    
-    // ОБЩО
     const totalEV = evEnergyCost + evMaint;
     const totalICE = iceFuelTheoretical + iceMaint;
     const savings = totalICE - totalEV;
 
-    // --- HTML RENDER ---
     const setText = (id, txt) => { const e=document.getElementById(id); if(e) e.innerText=txt; };
     setText('stat-miles', miles.toFixed(0));
-    
-    // Лява колона (EV)
-    setText('stat-ev-charge', '£'+evEnergyCost.toFixed(2));
-    setText('stat-ev-maint', '£'+evMaint.toFixed(2));
-    
-    // Дясна колона (ICE)
-    setText('stat-ice-fuel', '£'+iceFuelTheoretical.toFixed(2));
-    setText('stat-ice-maint', '£'+iceMaint.toFixed(2));
+    setText('stat-ev-charge', '£'+evEnergyCost.toFixed(2)); setText('stat-ev-maint', '£'+evMaint.toFixed(2));
+    setText('stat-ice-fuel', '£'+iceFuelTheoretical.toFixed(2)); setText('stat-ice-maint', '£'+iceMaint.toFixed(2));
 
     const card = document.getElementById('tco-card');
     if(card) {
         const color = savings >= 0 ? '#4CAF50' : '#f44336';
         card.style.border = `2px solid ${color}`;
-        card.innerHTML = `
-            <div style="color:#ccc; font-size:0.9em; text-transform:uppercase;">Общ Баланс (ТCO)</div>
-            <div style="font-size:2em; font-weight:bold; color:${color}; margin:10px 0">
-                ${savings>0?'+':''}£${savings.toFixed(2)}
-            </div>
-            <div style="display:flex; justify-content:space-between; color:#888; font-size:0.85rem; margin-top:5px;">
-                <span>⚡ EV: £${totalEV.toFixed(0)}</span>
-                <span>⛽ ICE: £${totalICE.toFixed(0)}</span>
-            </div>
-            <div style="font-size:0.75rem; color:#666; margin-top:5px;">(Вкл. Гориво + Поддръжка)</div>
-        `;
+        card.innerHTML = `<div style="color:#ccc; font-size:0.9em; text-transform:uppercase;">Общ Баланс (ТCO)</div>
+            <div style="font-size:2em; font-weight:bold; color:${color}; margin:10px 0">${savings>0?'+':''}£${savings.toFixed(2)}</div>
+            <div style="display:flex; justify-content:space-between; color:#888; font-size:0.85rem; margin-top:5px;"><span>⚡ EV: £${totalEV.toFixed(0)}</span><span>⛽ ICE: £${totalICE.toFixed(0)}</span></div>`;
     }
-    
-    // Рисуване на графиката с новите изчислени променливи
-    if (typeof Chart !== 'undefined') {
-        renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
-    }
+    if (typeof Chart !== 'undefined') renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
 }
 
 function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
-    const canvas = document.getElementById('compareChart') || document.querySelector('canvas');
+    const canvas = document.getElementById('compareChart');
     if (!canvas) return;
-
-    // Унищожаваме старата графика, ако съществува
-    if (compareChart) {
-        compareChart.destroy();
-    }
-
-    // Рисуваме нова Stacked Bar Chart (Стълбчета едно върху друго)
+    if (compareChart) compareChart.destroy();
     compareChart = new Chart(canvas, {
         type: 'bar',
         data: {
             labels: ['Моята Кола (EV)', 'Алтернатива (ICE)'],
             datasets: [
-                {
-                    label: 'Движение (Ток / Бензин)',
-                    data: [evEnergyCost, iceFuelTheoretical],
-                    backgroundColor: ['#4CAF50', '#f44336'], // Зелено / Червено
-                    borderWidth: 0
-                },
-                {
-                    label: 'Поддръжка (Сервиз, Гуми)',
-                    data: [evMaint, iceMaint],
-                    backgroundColor: ['#81C784', '#e57373'], // Светлозелено / Светлочервено
-                    borderWidth: 0
-                }
+                { label: 'Движение', data: [evEnergyCost, iceFuelTheoretical], backgroundColor: ['#4CAF50', '#f44336'], borderWidth: 0 },
+                { label: 'Поддръжка', data: [evMaint, iceMaint], backgroundColor: ['#81C784', '#e57373'], borderWidth: 0 }
             ]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: { 
-                    stacked: true, 
-                    ticks: { color: '#ccc' }
-                },
-                y: { 
-                    stacked: true, 
-                    beginAtZero: true,
-                    ticks: { color: '#ccc' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                }
-            }
-        }
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
     });
 }
-//Тук завършва CHART & STATS LOGIC
