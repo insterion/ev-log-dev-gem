@@ -35,13 +35,10 @@
         <button class="tabbtn" data-tab="settings">Settings</button>
       </nav>
 
-  <section id="log" class="tab active">
-        
-        <div id="home-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
-            </div>
+      <section id="log" class="tab active">
+        <div id="home-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;"></div>
 
         <h3>Добави Зареждане</h3>
-        
         <div style="display:flex; gap:10px;">
             <div class="input-group" style="flex:1;">
                 <label>Дата</label>
@@ -56,7 +53,7 @@
         <div class="input-group">
             <label>Тип</label>
             <select id="type">
-                <option value="home" data-price="0.29">Домашно (0.29)</option>
+                <option value="home">Домашно (Home)</option>
                 <option value="public" data-price="0.56" selected>Публично (0.56)</option>
                 <option value="fast" data-price="0.79">Бързо (0.79)</option>
                 <option value="work" data-price="0.00">Служебно (0.00)</option>
@@ -70,7 +67,7 @@
 
         <div class="input-group">
             <label>Цена (£/kWh)</label>
-            <input type="number" id="price" step="0.01" placeholder="0.56">
+            <input type="number" id="price" step="0.01" placeholder="0.24">
         </div>
 
         <div id="log-preview" style="margin-bottom:15px; display:none;"></div>
@@ -114,9 +111,9 @@
         <div id="costTable" style="margin-top:20px;"></div>
       </section>
 
-     <section id="garage" class="tab">
+      <section id="garage" class="tab">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2 id="garage-title" style="margin:0;">🔔 Напомняния</h2>
+            <h2 id="garage-title" style="margin:0;">🔔 Напомняния (EV)</h2>
             <div class="toggle-container">
                 <button id="btn-sw-ev" class="toggle-btn active">EV</button>
                 <button id="btn-sw-ice" class="toggle-btn">ICE</button>
@@ -238,6 +235,7 @@
             </div>
             <div style="text-align:center; margin-bottom:10px;">Пробег: <span id="stat-miles">0</span> mi</div>
             <div style="background:#1a1a1a; padding:10px; border-radius:10px; height:300px;"><canvas id="tcoChart"></canvas></div>
+            <div style="background:#1a1a1a; padding:10px; border-radius:10px; height:300px; margin-top:20px;"><canvas id="compareChart"></canvas></div>
         </div>
         <h3>🧮 Калкулатор (Trip)</h3>
         <div class="compare-box" style="background:#111; padding:15px; border-radius:10px; text-align:center;">
@@ -251,6 +249,7 @@
       <section id="settings" class="tab">
         <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
             <h3>🏎️ Настройки</h3>
+            <div class="section-block"><label>Домашна цена (£/kWh)</label><input type="number" id="set_home_price" step="0.001" placeholder="0.24"></div>
             <div class="section-block"><label>EV Ефективност (mi/kWh)</label><input type="number" id="set_ev_eff" step="0.1"></div>
             <div class="section-block"><label>ICE Разход (MPG)</label><input type="number" id="set_ice_mpg" step="1"></div>
             <div class="section-block"><label>Цена Гориво (£/Liter)</label><input type="number" id="set_fuel_price" step="0.01"></div>
@@ -268,7 +267,7 @@
         
         <div style="background:#111; padding:15px; border-radius:10px; border:1px solid #333; margin-bottom:20px; border-left: 4px solid #ff9800;">
             <h3>📥 Импорт (Restore)</h3>
-            <p style="font-size:0.8rem; color:#888; margin-top:0;">Възстанови данни от CSV файл. Внимание: записите ще се добавят към текущите.</p>
+            <p style="font-size:0.8rem; color:#888; margin-top:0;">Възстанови данни от CSV файл.</p>
             <input type="file" id="importFile" accept=".csv" style="margin-top:10px; font-size:0.9em;">
             <button id="btnImport" style="background:#ff9800; color:#000; margin-top:10px;">Старт Импорт</button>
         </div>
