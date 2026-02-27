@@ -749,11 +749,21 @@ function updateStats() {
     if (typeof Chart !== 'undefined') renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
 }
 
+
+// 1. Декларираме променливата ТУК, извън функцията, за да не се сърди Strict Mode-ът
+let myCompareChart = null;
+
 function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
     const canvas = document.getElementById('compareChart');
     if (!canvas) return;
-    if (compareChart) compareChart.destroy();
-    compareChart = new Chart(canvas, {
+    
+    // 2. Унищожаваме старата графика, ако има такава, за да не се бъгва при презареждане
+    if (myCompareChart) {
+        myCompareChart.destroy();
+    }
+    
+    // 3. Рисуваме новата графика
+    myCompareChart = new Chart(canvas, {
         type: 'bar',
         data: {
             labels: ['Моята Кола (EV)', 'Алтернатива (ICE)'],
@@ -762,6 +772,13 @@ function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
                 { label: 'Поддръжка', data: [evMaint, iceMaint], backgroundColor: ['#81C784', '#e57373'], borderWidth: 0 }
             ]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                x: { stacked: true }, 
+                y: { stacked: true, beginAtZero: true } 
+            } 
+        }
     });
 }
