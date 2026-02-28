@@ -1,4 +1,4 @@
-/* main.js - Version: Full, Fixed Dynamic Home Price & Garage Toggle */
+/* main.js - Version: Full, Fixed Dynamic Home Price & Garage Toggle, Fixed Charts */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -26,7 +26,7 @@ enableIndexedDbPersistence(db).catch((err) => {
     console.log("Persistence logic:", err.code);
 });
 
-// Състояние на приложението (Добавена homePrice)
+// Състояние на приложението
 const State = {
     user: null,
     logs: [],
@@ -309,7 +309,6 @@ function bindLogForm() {
         if (btnAdd.classList.contains("update-mode-btn")) return;
         const opt = typeSelect.options[typeSelect.selectedIndex];
         
-        // Взимане на динамичната цена за домашно зареждане
         if (opt.value === "home" || opt.text.includes("Home") || opt.text.includes("Домашно")) {
             priceInput.value = State.settings.homePrice || 0.24; 
         } else if(opt && opt.dataset.price) {
@@ -382,7 +381,6 @@ function renderLogList() {
     const div = document.getElementById('logTable');
     let html = '';
 
-    // Динамични стойности от Settings
     const ICE_MPG = State.settings.iceMpg || 45;
     const ICE_FUEL_PRICE = State.settings.fuelPrice || 1.45;
     const LITERS_PER_GALLON = 4.54609;
@@ -452,7 +450,6 @@ function renderCostsList() {
     const div = document.getElementById('costs');
     if (!div) return;
 
-    // Динамични стойности от Settings
     const ICE_MPG = State.settings.iceMpg || 45;
     const ICE_FUEL_PRICE = State.settings.fuelPrice || 1.45;
     const LITERS_PER_GALLON = 4.54609;
@@ -604,7 +601,6 @@ function renderCostsList() {
     });
 }
 
-// GARAGE LOGIC - Fixed Toggle IDs
 function bindGarage() {
     const btnEv = document.getElementById('btn-sw-ev');
     const btnIce = document.getElementById('btn-sw-ice');
@@ -713,8 +709,86 @@ function bindChartControls() {
     const bCum = document.getElementById('btn-chart-cum');
     const bMonth = document.getElementById('btn-chart-month');
     if(!bCum || !bMonth) return;
-    bCum.addEventListener('click', () => { State.chartMode = 'cumulative'; bCum.classList.add('active'); bMonth.classList.remove('active'); updateStats(); });
-    bMonth.addEventListener('click', () => { State.chartMode = 'monthly'; bMonth.classList.add('active'); bCum.classList.remove('active'); updateStats(); });
+    
+    bCum.addEventListener('click', () => { 
+        State.chartMode = 'cumulative'; 
+        bCum.classList.add('active'); 
+        bMonth.classList.remove('active'); 
+        updateStats(); 
+    });
+    
+    bMonth.addEventListener('click', () => { 
+        State.chartMode = 'monthly'; 
+        bMonth.classList.add('active'); 
+        bCum.classList.remove('active'); 
+        updateStats(); 
+    });
+}
+
+// Функции за обработка на данни за TCO графиката
+function prepareTcoData(mode) {
+    let monthsData = {};
+    const ICE_MPG = State.settings.iceMpg || 45;
+    const ICE_FUEL_PRICE = State.settings.fuelPrice || 1.45;
+    const EV_EFF = State.settings.evEff || 3.5;
+    const LITERS_PER_GALLON = 4.54609;
+
+    // Обединяване и сортиране на всички записи по дата
+    const allRecords = [
+        ...State.logs.map(l => ({ ...l, type: 'charge' })),
+        ...State.costs.map(c => ({ ...c, type: 'cost' }))
+    ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    allRecords.forEach(record => {
+        const monthKey = record.date.substring(0, 7); // Взимаме "ГГГГ-ММ"
+        if (!monthsData[monthKey]) {
+            monthsData[monthKey] = { evCost: 0, iceCost: 0, kwh: 0, evMaint: 0, iceMaint: 0 };
+        }
+
+        if (record.type === 'charge') {
+            const cost = record.total !== undefined ? parseFloat(record.total) : (parseFloat(record.kwh) * parseFloat(record.price));
+            monthsData[monthKey].evCost += cost;
+            monthsData[monthKey].kwh += parseFloat(record.kwh);
+            
+            // Теоретичен разход за гориво за тази енергия
+            const miles = parseFloat(record.kwh) * EV_EFF;
+            const theoreticalIceFuel = (miles / ICE_MPG) * LITERS_PER_GALLON * ICE_FUEL_PRICE;
+            monthsData[monthKey].iceCost += theoreticalIceFuel;
+            
+        } else if (record.type === 'cost') {
+            const amount = parseFloat(record.amount) || 0;
+            if (record.car === 'ice') {
+                monthsData[monthKey].iceMaint += amount;
+            } else {
+                monthsData[monthKey].evMaint += amount;
+            }
+        }
+    });
+
+    const labels = Object.keys(monthsData).sort(); // Сортираме хронологично
+    let evData = [];
+    let iceData = [];
+    
+    let runningEv = 0;
+    let runningIce = 0;
+
+    labels.forEach(label => {
+        const data = monthsData[label];
+        const monthEvTotal = data.evCost + data.evMaint;
+        const monthIceTotal = data.iceCost + data.iceMaint;
+
+        if (mode === 'cumulative') {
+            runningEv += monthEvTotal;
+            runningIce += monthIceTotal;
+            evData.push(runningEv);
+            iceData.push(runningIce);
+        } else { // monthly
+            evData.push(monthEvTotal);
+            iceData.push(monthIceTotal);
+        }
+    });
+
+    return { labels, evData, iceData };
 }
 
 function updateStats() {
@@ -746,23 +820,30 @@ function updateStats() {
             <div style="font-size:2em; font-weight:bold; color:${color}; margin:10px 0">${savings>0?'+':''}£${savings.toFixed(2)}</div>
             <div style="display:flex; justify-content:space-between; color:#888; font-size:0.85rem; margin-top:5px;"><span>⚡ EV: £${totalEV.toFixed(0)}</span><span>⛽ ICE: £${totalICE.toFixed(0)}</span></div>`;
     }
-    if (typeof Chart !== 'undefined') renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
+    
+    // Рисуваме графиките
+    if (typeof Chart !== 'undefined') {
+        renderCompareChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint);
+        
+        // Подготовка на данни за TCO графиката и рисуване
+        const chartType = State.chartMode === 'cumulative' ? 'line' : 'bar';
+        const tcoData = prepareTcoData(State.chartMode);
+        renderTcoChart(tcoData.labels, tcoData.evData, tcoData.iceData, chartType);
+    }
 }
 
-
-// 1. Декларираме променливата ТУК, извън функцията, за да не се сърди Strict Mode-ът
+// CHARTS LOGIC
 let myCompareChart = null;
+let myTcoChart = null;
 
-function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
+function renderCompareChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
     const canvas = document.getElementById('compareChart');
     if (!canvas) return;
     
-    // 2. Унищожаваме старата графика, ако има такава, за да не се бъгва при презареждане
     if (myCompareChart) {
         myCompareChart.destroy();
     }
     
-    // 3. Рисуваме новата графика
     myCompareChart = new Chart(canvas, {
         type: 'bar',
         data: {
@@ -779,6 +860,64 @@ function renderChart(evEnergyCost, evMaint, iceFuelTheoretical, iceMaint) {
                 x: { stacked: true }, 
                 y: { stacked: true, beginAtZero: true } 
             } 
+        }
+    });
+}
+
+function renderTcoChart(labels, evData, iceData, chartType = 'line') {
+    const canvas = document.getElementById('tcoChart');
+    if (!canvas) return;
+
+    if (myTcoChart) {
+        myTcoChart.destroy();
+    }
+
+    const isLine = chartType === 'line';
+
+    myTcoChart = new Chart(canvas, {
+        type: chartType,
+        data: {
+            labels: labels, 
+            datasets: [
+                {
+                    label: 'EV Общо (£)',
+                    data: evData,
+                    backgroundColor: isLine ? 'rgba(76, 175, 80, 0.2)' : '#4CAF50',
+                    borderColor: '#4CAF50',
+                    borderWidth: 2,
+                    fill: isLine,
+                    tension: 0.3 
+                },
+                {
+                    label: 'ICE Общо (£)',
+                    data: iceData,
+                    backgroundColor: isLine ? 'rgba(244, 67, 54, 0.2)' : '#f44336',
+                    borderColor: '#f44336',
+                    borderWidth: 2,
+                    fill: isLine,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    ticks: { color: '#aaa' },
+                    grid: { color: '#333' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#aaa' },
+                    grid: { color: '#333' }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            }
         }
     });
 }
